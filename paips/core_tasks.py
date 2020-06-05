@@ -7,6 +7,10 @@ from operator import itemgetter
 
 class TaskGraph(Task):
 	def __init__(self, config, global_config):
+		"""
+		TaskGraph represents a task which consists of multiple subtasks to be executed, potentially depending each of these tasks
+		of previously executed tasks. It will generate a graph of tasks, calculate the execution order and run it.
+		"""
 		super().__init__(config, global_config)
 		self.required_fields = ['Tasks']
 		self.check_requirements()
@@ -19,7 +23,9 @@ class TaskGraph(Task):
 		self.tasks_io = {}
 
 	def gather_tasks(self):
-		#Here, all the tasks in config are instantiated and added as nodes to a nx graph
+		"""
+		Here, all the tasks in config are instantiated and added as nodes to a nx graph
+		"""
 		self.task_nodes = {}
 		for task_name, task_config in self.config['Tasks'].items():
 			task_class = task_config['class']
@@ -35,7 +41,9 @@ class TaskGraph(Task):
 			self.graph.add_node(task_instance)
 
 	def connect_tasks(self):
-		#Here, edges are created using the dependencies variable from each task
+		"""
+		Here, edges are created using the dependencies variable from each task
+		"""
 		for task_name, task in self.task_nodes.items():
 			dependencies = task.get_dependencies()
 			if len(dependencies)>0:
@@ -43,6 +51,9 @@ class TaskGraph(Task):
 					self.graph.add_edge(self.task_nodes[dependency],task)
 
 	def load_modules(self):
+		"""
+		Get all the modules where task definitions are found
+		"""
 		module_paths = ['core_tasks.py']
 		if 'modules' in self.config:
 			module_paths_ = self.config['modules']
@@ -62,9 +73,15 @@ class TaskGraph(Task):
 			self.task_modules.append(module)
 
 	def get_dependency_order(self):
+		"""
+		Use topological sort to get the order of execution.
+		"""
 		self.dependency_order = list(nx.topological_sort(self.graph))
 
 	def operation(self):
+		"""
+		Runs each task in order, gather outputs and inputs.
+		"""
 		print('Running {}'.format(self.name))
 		for task in self.dependency_order:
 			print('Running {}'.format(task.name))
