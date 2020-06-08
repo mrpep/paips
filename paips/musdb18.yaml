@@ -10,14 +10,14 @@ Tasks:
     stem_as_column: instrument #Use filename as this column
   Framer:
     class: Framer
-    in: MUSDB18Reader.out
+    in: MUSDB18Reader->out
     time_column: samples_count
     frame_size: 16384
     hop_size: 8192
     in_memory: True
   Mixer:
     class: Zipper
-    in: Framer.out
+    in: Framer->out
     zip_by:
     - song
     - start
@@ -26,11 +26,21 @@ Tasks:
     - start
     - end
     - sampling_rate
+    - instrument
   Partition:
     class: Split
-    in: Mixer.out
+    in: Mixer->out
     split_col: partition
     in_memory: True
+  TrainGenerator:
+    class: DeytahTask
+    in: Partition->train
+    deytah_config: deytah_configs/aligned_mix.yaml
+    deytah_x: mixture
+    deytah_y: sources
+    batch_size: 16
+
+
   
   
 

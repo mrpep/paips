@@ -1,1 +1,1 @@
-symbols = {'dot':'.'}
+symbols = {'dot':'->'}

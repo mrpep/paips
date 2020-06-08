@@ -1,4 +1,4 @@
-from utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module, make_graph_from_tasks
+from utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module, make_graph_from_tasks, symbols
 from IPython import embed
 import copy
 import joblib
@@ -80,14 +80,14 @@ class Task():
 		cache_paths = find_cache(task_hash,self.global_parameters['cache_path'])
 		if self.cache and cache_paths:
 			print('Caching task {}'.format(self.name))
-			out_dict = {'{}.{}'.format(self.name,Path(cache_i).stem): TaskIO(cache_i,task_hash,iotype='path',name=Path(cache_i).stem) for cache_i in cache_paths}
+			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,task_hash,iotype='path',name=Path(cache_i).stem) for cache_i in cache_paths}
 		else:
 			print('Running task {}'.format(self.name))
 			outs = self.process()
 			if not isinstance(outs,tuple):
 				outs = (outs,)
 
-			out_dict = {'{}.{}'.format(self.name,out_name): TaskIO(out_val,task_hash,iotype='data',name=out_name) for out_name, out_val in zip(self.output_names,outs)}
+			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],out_name): TaskIO(out_val,task_hash,iotype='data',name=out_name) for out_name, out_val in zip(self.output_names,outs)}
 		
 			if not self.in_memory:
 				print('Saving outputs from task {}'.format(self.name))

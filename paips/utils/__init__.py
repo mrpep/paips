@@ -11,6 +11,7 @@ from .modiuls import *
 from .nested import *
 from .cache import *
 from .graphs import *
+from .settings import symbols
 
 def get_delete_param(dictionary,param,default_value=None):
     if param in dictionary:
