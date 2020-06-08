@@ -7,6 +7,19 @@ import importlib
 import sys
 import inspect
 
+from .modiuls import *
+from .nested import *
+from .cache import *
+
+def get_delete_param(dictionary,param,default_value=None):
+    if param in dictionary:
+        return dictionary.pop(param)
+    else:
+        if default_value is not None:
+            return default_value
+        else:
+            raise Exception('Missing {}'.format(param))
+
 def load_pickle(path):
     with open(path, 'rb') as fp:
         return pickle.load(fp)
@@ -45,7 +58,6 @@ def get_labels_from_deytah(filename):
                     return proc['labels']
     return None
 
-
 def get_run_output_path(config, output_path, overwrite=True):
     run_output_path = Path(output_path, config['name'])
     if run_output_path.exists():
@@ -55,7 +67,6 @@ def get_run_output_path(config, output_path, overwrite=True):
         run_output_path.mkdir(parents=True)
     return run_output_path
 
-
 def assert_config(config):
     assert 'experiment_name' in config.keys()
 
@@ -64,37 +75,3 @@ def copy_config(config_path, output_dir, name=None):
         name = "config"
     copy_path = str(Path(output_dir, name).with_suffix(".yaml"))
     shutil.copy(config_path, copy_path)
-
-def module_from_file(module_name, file_path):
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-def module_from_folder(module_path):
-    """
-    Arguments:
-        module_path: path to a .py file
-    Returns:
-        the module in module_path
-    """
-
-    module_path = Path(module_path)
-    sys.path.append(str((module_path.absolute()).parent))
-    module = importlib.import_module(module_path.stem)
-
-    return module
-
-def get_classes_in_module(module):
-    """
-    Returns a dictionary containing all the available classes in a module.
-    Arguments:
-        module: a module from which to extract available classes
-    Outputs:
-        returns a dictionary containing class names as keys and class objects as values. 
-    """
-
-    clsmembers = inspect.getmembers(module, inspect.isclass)
-    clsmembers_dict = {cls[0]:cls[1] for cls in clsmembers}
-
-    return clsmembers_dict
