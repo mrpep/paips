@@ -14,4 +14,16 @@ Tasks:
     time_column: samples_count
     frame_size: 16384
     hop_size: 8192
+    in_memory: True
+  Mixer:
+    class: Zipper
+    in: Framer.out
+    zip_by:
+    - song
+    - start
+    columns:
+    - filename
+    - start
+    - end
+    - sampling_rate
 

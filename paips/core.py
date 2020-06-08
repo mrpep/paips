@@ -21,19 +21,20 @@ class TaskIO():
 		elif self.iotype == 'path':
 			return joblib.load(self.data)
 
-	def save(self, path):
+	def save(self, path, compression_level = 0):
 		destination_path = Path(path,self.hash)
 		if not destination_path.exists():
 			destination_path.mkdir(parents=True)
 
-		joblib.dump(self.data,Path(destination_path,self.name))
+		joblib.dump(self.data,Path(destination_path,self.name),compress=compression_level)
 		return TaskIO(Path(destination_path,self.name),self.hash,iotype='path',name=self.name)
 
 class Task():
 	def __init__(self, parameters, global_parameters=None, name=None, logger=None):
 
 		self.global_parameters = {'cache': True,
-							 'cache_path': 'cache'}
+							 'cache_path': 'cache',
+							 'cache_compression': 0}
 
 		if global_parameters:
 			self.global_parameters.update(global_parameters)
@@ -90,7 +91,7 @@ class Task():
 				print('Saving outputs from task {}'.format(self.name))
 				for k,v in out_dict.items():
 					if v.iotype == 'data':
-						out_dict[k] = v.save(self.global_parameters['cache_path'])	
+						out_dict[k] = v.save(self.global_parameters['cache_path'],compression_level=self.global_parameters['cache_compression'])	
 
 		return out_dict 
 

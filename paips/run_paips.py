@@ -10,7 +10,7 @@ global_config = {'cache': True,
 				 'in_memory': False,
 				 'cache_dir': 'cache',
 				 'output_dir': 'experiments',
-				 'list_path': '/home/lpepino/trust-corpus-extras/lists/recorded_at_lab/produced'}
+				 'cache_compression': 3}
 
 main_task = TaskGraph(myconfig,global_config,name='maintask')
 main_task.run()
