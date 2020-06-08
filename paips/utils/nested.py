@@ -1,4 +1,4 @@
-from settings import symbols
+from .settings import symbols
 
 def search_dependencies(elem,dependencies):
 	if isinstance(elem,dict):
