@@ -5,9 +5,6 @@ from IPython import embed
 import numpy as np
 
 class Zipper(Task):
-	def __init__(self,parameters,global_parameters=None,name=None,logger=None):
-		super().__init__(parameters,global_parameters,name,logger)
-
 	def process(self):
 		progbar = tqdm.tqdm(total=len(self.parameters['zip_by'])+1)
 		zipped_df = self.parameters['in'].groupby(self.parameters['zip_by']).aggregate(lambda x: [x.tolist()])

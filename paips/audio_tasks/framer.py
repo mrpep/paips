@@ -5,9 +5,6 @@ from IPython import embed
 import numpy as np
 
 class Framer(Task):
-	def __init__(self,parameters,global_parameters=None,name=None,logger=None):
-		super().__init__(parameters,global_parameters,name,logger)
-
 	def process(self):
 		df_data = self.parameters['in']
 		out_dfs = []
@@ -18,8 +15,7 @@ class Framer(Task):
 			new_ids = ['{}_{}'.format(logid,i) for i in range(len(starts))]
 			row_dict = {'start': starts,
 						'end': ends,
-						'logid': new_ids
-						}
+						'logid': new_ids}
 			for k,v in row.iteritems():
 				row_dict[k] = v
 			df_i = pd.DataFrame(row_dict).set_index('logid')

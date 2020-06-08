@@ -26,4 +26,14 @@ Tasks:
     - start
     - end
     - sampling_rate
+  Partition:
+    class: Split
+    in: Mixer.out
+    split_col: partition
+    in_memory: True
+  
+  
+
+
+
 

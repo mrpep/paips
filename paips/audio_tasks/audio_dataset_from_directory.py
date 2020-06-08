@@ -7,9 +7,6 @@ import tqdm
 import pandas as pd
 
 class AudioDatasetFromDirectory(Task):
-	def __init__(self,parameters,global_parameters=None,name=None,logger=None):
-		super().__init__(parameters,global_parameters,name,logger)
-
 	def process(self):
 		files = []
 		for file in tqdm.tqdm(Path(self.parameters['dataset_path']).rglob('*.wav')):

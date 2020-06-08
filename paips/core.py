@@ -149,6 +149,12 @@ class TaskGraph(Task):
 		"""
 		Runs each task in order, gather outputs and inputs.
 		"""
+
+		"""
+		ToDo:
+		- Chequear en cada tarea si algo de tasks_io puede borrarse porque ya no se necesita.
+		- Loop execution mode
+		"""
 		self.tasks_io = {}
 		for task in self.dependency_order:
 			task.send_dependency_data(self.tasks_io)
