@@ -10,15 +10,13 @@ import inspect
 from .modiuls import *
 from .nested import *
 from .cache import *
+from .graphs import *
 
 def get_delete_param(dictionary,param,default_value=None):
     if param in dictionary:
         return dictionary.pop(param)
     else:
-        if default_value is not None:
-            return default_value
-        else:
-            raise Exception('Missing {}'.format(param))
+        return default_value
 
 def load_pickle(path):
     with open(path, 'rb') as fp:

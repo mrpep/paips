@@ -1,4 +1,4 @@
-from utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module
+from utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module, make_graph_from_tasks
 from IPython import embed
 import copy
 import joblib
@@ -41,14 +41,16 @@ class Task():
 
 		self.name = name
 		self.valid_args=[]
-		self.output_names =	get_delete_param(parameters,'output_names',['out'])
-		self.cache = get_delete_param(parameters,'cache',self.global_parameters['cache'])
-		self.in_memory = get_delete_param(parameters,'in_memory',self.global_parameters['in_memory'])
+
 		self.parameters = parameters
+		self.output_names =	get_delete_param(self.parameters,'output_names',['out'])
+		self.cache = get_delete_param(self.parameters,'cache',self.global_parameters['cache'])
+		self.in_memory = get_delete_param(self.parameters,'in_memory',self.global_parameters['in_memory'])
+
 		self.dependencies = []
 		self.logger = logger
-		self.hash_dict = copy.deepcopy(self.parameters)
 
+		self.hash_dict = copy.deepcopy(self.parameters)
 
 	def search_dependencies(self):
 		search_dependencies(self.parameters,self.dependencies)
@@ -101,6 +103,8 @@ class TaskGraph(Task):
 		#Gather modules:
 		self.external_modules = self.parameters.get('modules',[])
 		self.external_modules = self.external_modules + self.global_parameters.get('modules',[])
+		self.target = self.parameters.get('target',None)
+
 		self.load_modules()
 		#Build the graph
 		self.graph = nx.DiGraph()
@@ -127,24 +131,43 @@ class TaskGraph(Task):
 			task_obj = task_obj[0]
 			task_instance = task_obj(task_config,self.global_parameters,task_name,self.logger)
 			self.task_nodes[task_name] = task_instance
-			self.graph.add_node(task_instance)
+			#self.graph.add_node(task_instance)
 
 	def connect_tasks(self):
 		"""
 		Here, edges are created using the dependencies variable from each task
 		"""
-		for task_name, task in self.task_nodes.items():
-			dependencies = task.search_dependencies()
-			if len(dependencies)>0:
-				for dependency in dependencies:
-					self.graph.add_edge(self.task_nodes[dependency],task)
+		self.graph = make_graph_from_tasks(self.task_nodes)
 
 	def get_dependency_order(self):
 		"""
-		Use topological sort to get the order of execution.
+		Use topological sort to get the order of execution. If a target task is specified, find the shortest path.
 		"""
 		self.dependency_order = list(nx.topological_sort(self.graph))
 
+		if self.target:
+			#Si tengo que ejecutar el DAG hasta cierto nodo, primero me fijo que nodo es:
+			target_node = [node for node in self.dependency_order if node.name == self.target][0]
+			target_idx = self.dependency_order.index(target_node)
+			#Despues trunco la lista hasta el nodo, con esto estaria sacando todas las tareas que se iban a ejecutar despues:
+			self.dependency_order = self.dependency_order[:target_idx+1]
+			#Con esto puedo armar otro grafo que solo contenga los nodos que se iban a ejecutar antes que target.
+			reduced_task_nodes = {node.name: node for node in self.dependency_order}
+			pruned_graph = make_graph_from_tasks(reduced_task_nodes)
+			#Es posible que algunas tareas se ejecutaran antes que target pero que no fueran necesarias para target sino que para un nodo posterior.
+			#Estas tareas quedarian desconectadas del target. Busco los subgrafos conectados:
+			connected_subgraphs = list(nx.components.connected_component_subgraphs(pruned_graph.to_undirected()))
+			#Si hay mas de uno es porque quedaron tareas que no llevan a ningun lado. Agarro el subgrafo con la tarea target:
+			if len(connected_subgraphs)>1:
+				reachable_subgraph = [g for g in connected_subgraphs if target_node in g.nodes][0]
+			else:
+				reachable_subgraph = connected_subgraphs[0]
+			#Armo el grafo de nuevo porque el algoritmo de subgrafos conectados necesita que sea un UAG.
+			reduced_task_nodes = {node.name: node for node in reachable_subgraph.nodes}
+			pruned_graph = make_graph_from_tasks(reduced_task_nodes)
+			#Topological sort del grafo resultante me da las dependencias para el target task:
+			self.dependency_order = list(nx.topological_sort(pruned_graph))
+			
 	def process(self):
 		"""
 		Runs each task in order, gather outputs and inputs.
