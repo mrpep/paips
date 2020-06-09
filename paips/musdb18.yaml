@@ -33,12 +33,18 @@ Tasks:
     split_col: partition
     in_memory: True
   TrainGenerator:
-    class: DeytahTask
+    class: DeytahGenerator
     in: Partition->train
-    deytah_config: deytah_configs/aligned_mix.yaml
+    deytah_config: deytah_configs/aligned_mix.yaml #Implementar incrustacion de configs
     deytah_x: mixture
     deytah_y: sources
     batch_size: 16
+    in_memory: True
+  DienenModel: #Implementar
+    class: DienenModel
+    in: TrainGenerator->out
+    dienen_config: dienen_configs/dual_hp_cnn.yaml #Implementar -> modelo tesis, capas con pesos compartidos en dienen... y bloques de capas. Fun.
+
 
 
   
