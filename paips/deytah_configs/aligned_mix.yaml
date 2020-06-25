@@ -13,14 +13,38 @@ Processors:
       audios: MultiAudioReader.sources
     gain: 1
     out: Mixer.mixture
+  STFTMixture:
+    processor: STFT
+    in: Mixer.mixture
+    win_length: 2048
+    hop_length: 512
+    out: STFTMixture.out
+    center: False
+    axis: 0
+  STFTSources:
+    processor: STFT
+    in: MultiAudioReader.sources
+    win_length: 2048
+    hop_length: 512
+    out: STFTSources.out
+    center: False
+    axis: 0
+  MagnitudeMixture:
+    processor: Abs
+    in: STFTMixture.out
+    out: MagnitudeMixture.out
+  MagnitudeSources:
+    processor: Abs
+    in: STFTSources.out
+    out: MagnitudeSources.out
   StackSources:
     processor: Stack
-    in: MultiAudioReader.sources
+    in: MagnitudeSources.out
     out: sources
     out_as: array
   StackMixtures:
     processor: Stack
-    in: Mixer.mixture
+    in: MagnitudeMixture.out
     out: mixture
     out_as: array
 Output:

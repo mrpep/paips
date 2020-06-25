@@ -3,7 +3,7 @@ modules:
 Tasks:
   MUSDB18Reader:
     class: AudioDatasetFromDirectory
-    dataset_path: /home/lpepino/MUSDB18/wav
+    dataset_path: /datasets/musdb18/wav
     parents_as_columns: #Use parent folders names as these columns
     - partition
     - song
@@ -12,8 +12,8 @@ Tasks:
     class: Framer
     in: MUSDB18Reader->out
     time_column: samples_count
-    frame_size: 16384
-    hop_size: 8192
+    frame_size: 12288
+    hop_size: 12288
     in_memory: True
   Mixer:
     class: Zipper
@@ -42,8 +42,8 @@ Tasks:
     in_memory: True
   DienenModel: #Implementar
     class: DienenModel
-    in: TrainGenerator->out
-    dienen_config: dienen_configs/dual_hp_cnn.yaml #Implementar -> modelo tesis, capas con pesos compartidos en dienen... y bloques de capas. Fun.
+    generator: TrainGenerator->out
+    dienen_config: dienen_configs/dual_cnn_stft.yaml
 
 
 
