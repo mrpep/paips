@@ -1,4 +1,4 @@
-from utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module, make_graph_from_tasks, symbols
+from .utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module, make_graph_from_tasks, symbols
 from IPython import embed
 import copy
 import joblib

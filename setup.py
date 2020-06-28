@@ -50,4 +50,9 @@ setup(
 
     project_urls={  # Optional
     },
+
+    entry_points={
+    'console_scripts': [
+        'paiprun=paips.run_paips:main'
+    ]}
 )
