@@ -25,8 +25,9 @@ class TaskIO():
 		destination_path = Path(path,self.hash)
 		if not destination_path.exists():
 			destination_path.mkdir(parents=True)
-
+			
 		joblib.dump(self.data,Path(destination_path,self.name),compress=compression_level)
+
 		return TaskIO(Path(destination_path,self.name),self.hash,iotype='path',name=self.name)
 
 class Task():
@@ -75,20 +76,26 @@ class Task():
 	def process(self):
 		pass
 
+	def find_cache(self):
+		cache_paths = find_cache(self.task_hash,self.global_parameters['cache_path'])
+		return cache_paths
+
 	def run(self):
-		task_hash = self.get_hash()
-		cache_paths = find_cache(task_hash,self.global_parameters['cache_path'])
+		self.task_hash = self.get_hash()
+		self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
+		
+		cache_paths = self.find_cache()
 		if self.cache and cache_paths:
 			print('Caching task {}'.format(self.name))
-			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,task_hash,iotype='path',name=Path(cache_i).stem) for cache_i in cache_paths}
+			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem) for cache_i in cache_paths}
 		else:
 			print('Running task {}'.format(self.name))
 			outs = self.process()
 			if not isinstance(outs,tuple):
 				outs = (outs,)
 
-			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],out_name): TaskIO(out_val,task_hash,iotype='data',name=out_name) for out_name, out_val in zip(self.output_names,outs)}
-		
+			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],out_name): TaskIO(out_val,self.task_hash,iotype='data',name=out_name) for out_name, out_val in zip(self.output_names,outs)}
+
 			if not self.in_memory:
 				print('Saving outputs from task {}'.format(self.name))
 				for k,v in out_dict.items():
@@ -168,6 +175,16 @@ class TaskGraph(Task):
 			#Topological sort del grafo resultante me da las dependencias para el target task:
 			self.dependency_order = list(nx.topological_sort(pruned_graph))
 			
+	def _clear_tasksio_not_needed(self, remaining_tasks):
+		needed_tasks = [list(self.graph.predecessors(node)) for node in self.graph.nodes if node.name in remaining_tasks]
+		needed_tasks = [task.name for predecessors in needed_tasks for task in predecessors]
+
+		tasks_io = copy.deepcopy(self.tasks_io)
+		for io_name,io_value in tasks_io.items():
+			task_producer = io_name.split(symbols['dot'])[0]
+			if task_producer not in needed_tasks:
+				self.tasks_io.pop(io_name)
+
 	def process(self):
 		"""
 		Runs each task in order, gather outputs and inputs.
@@ -178,11 +195,15 @@ class TaskGraph(Task):
 		- Chequear en cada tarea si algo de tasks_io puede borrarse porque ya no se necesita.
 		- Loop execution mode
 		"""
+
+		remaining_tasks = [task.name for task in self.dependency_order]
 		self.tasks_io = {}
 		for task in self.dependency_order:
 			task.send_dependency_data(self.tasks_io)
 			out_dict = task.run()
 			self.tasks_io.update(out_dict)
+			remaining_tasks.remove(task.name)
+			self._clear_tasksio_not_needed(remaining_tasks)
 
 		return self.tasks_io
 	
