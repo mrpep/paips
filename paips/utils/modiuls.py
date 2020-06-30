@@ -24,29 +24,32 @@ def module_from_folder(module_path):
     return module
 
 def get_modules(module_paths):
-	"""
-	Get all the modules where task definitions are found
-	"""
+    """
+    Get all the modules where task definitions are found
+    """
 
-	#module_paths = ['core_tasks.py']
-	#if 'modules' in self.config:
-	#	module_paths_ = self.config['modules']
-	#	if not isinstance(module_paths,list):
-	#		module_paths_ = [module_paths_]
-	#	module_paths.extend(module_paths_)
-	task_modules = []
-	for module_path in module_paths:
-		try:
-			module = module_from_file(Path(module_path).stem,module_path)
-		except:
-			try:
-				module = module_from_folder(module_path)	
-			except:
-				raise Exception('Could not import Module {}'.format(module_path))
+    #module_paths = ['core_tasks.py']
+    #if 'modules' in self.config:
+    #   module_paths_ = self.config['modules']
+    #   if not isinstance(module_paths,list):
+    #       module_paths_ = [module_paths_]
+    #   module_paths.extend(module_paths_)
+    task_modules = []
+    for module_path in module_paths:
+        try:
+            module = module_from_file(Path(module_path).stem,module_path)
+        except:
+            try:
+                module = module_from_folder(module_path)    
+            except:
+                try:
+                    module = importlib.import_module(module_path)
+                except:
+                    raise Exception('Could not import Module {}'.format(module_path))
 
-		task_modules.append(module)
+        task_modules.append(module)
 
-	return task_modules
+    return task_modules
 
 def get_classes_in_module(module):
     """
