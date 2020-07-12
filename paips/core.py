@@ -44,6 +44,7 @@ class Task():
 		self.valid_args=[]
 
 		self.parameters = parameters
+
 		self.output_names =	get_delete_param(self.parameters,'output_names',['out'])
 		self.cache = get_delete_param(self.parameters,'cache',self.global_parameters['cache'])
 		self.in_memory = get_delete_param(self.parameters,'in_memory',self.global_parameters['in_memory'])
@@ -86,10 +87,10 @@ class Task():
 		
 		cache_paths = self.find_cache()
 		if self.cache and cache_paths:
-			print('Caching task {}'.format(self.name))
+			self.logger.info('Caching task {}'.format(self.name))
 			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem) for cache_i in cache_paths}
 		else:
-			print('Running task {}'.format(self.name))
+			self.logger.info('Running task {}'.format(self.name))
 			outs = self.process()
 			if not isinstance(outs,tuple):
 				outs = (outs,)
@@ -97,7 +98,7 @@ class Task():
 			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],out_name): TaskIO(out_val,self.task_hash,iotype='data',name=out_name) for out_name, out_val in zip(self.output_names,outs)}
 
 			if not self.in_memory:
-				print('Saving outputs from task {}'.format(self.name))
+				self.logger.info('Saving outputs from task {}'.format(self.name))
 				for k,v in out_dict.items():
 					if v.iotype == 'data':
 						out_dict[k] = v.save(self.global_parameters['cache_path'],compression_level=self.global_parameters['cache_compression'])	
@@ -136,7 +137,7 @@ class TaskGraph(Task):
 			elif len(task_obj) > 1:
 				raise Exception('{} found in multiple task modules. Rename the task in your module to avoid name collisions'.format(task_class))
 			task_obj = task_obj[0]
-			task_instance = task_obj(task_config,self.global_parameters,task_name,self.logger)
+			task_instance = task_obj(copy.deepcopy(task_config),self.global_parameters,task_name,self.logger)
 			self.task_nodes[task_name] = task_instance
 			#self.graph.add_node(task_instance)
 
@@ -192,7 +193,6 @@ class TaskGraph(Task):
 
 		"""
 		ToDo:
-		- Chequear en cada tarea si algo de tasks_io puede borrarse porque ya no se necesita.
 		- Loop execution mode
 		"""
 
@@ -205,7 +205,7 @@ class TaskGraph(Task):
 			remaining_tasks.remove(task.name)
 			self._clear_tasksio_not_needed(remaining_tasks)
 
-		return self.tasks_io
+		return [self.tasks_io]
 	
 
 
