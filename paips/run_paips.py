@@ -34,9 +34,10 @@ def main():
     paips_logger = logger.get_logger('Paips','logs')
 
     #Embed external configs and global variables
-    main_config.replace_on_symbol(symbols['insert_config'],lambda x: Config(x).store)
-    main_config.replace_on_symbol(symbols['insert_variable'],lambda x: global_config[x])
-
+    #main_config.replace_on_symbol(symbols['insert_config'],lambda x: Config(x).store)
+    #main_config.replace_on_symbol(symbols['insert_variable'],lambda x: global_config[x])
+    main_config.find_path(symbols['insert_config'],mode='startswith',action=lambda x: Config(x.split(symbols['insert_config'])[-1]))
+    main_config.find_path(symbols['insert_variable'],mode='startswith',action=lambda x: global_config[x.split(symbols['insert_variable'])[-1]])
     main_task = TaskGraph(main_config,global_config,name='MainTask',logger=paips_logger)
     main_task.run()
 

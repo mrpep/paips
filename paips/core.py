@@ -97,9 +97,9 @@ class Task():
 		Replace TaskIOs in parameters with the corresponding data. Also adds its associated hashes to the hash dictionary
 		"""
 		for k,v in data.items():
-			paths = self.hash_dict.find_path(k,action='replace',replace_value=v.get_hash())
+			paths = self.hash_dict.find_path(k,action=lambda x: v.get_hash())
 			if len(paths) > 0:
-				self.parameters.find_path(k,action='replace',replace_value=v.load())
+				self.parameters.find_path(k,action=lambda x: v.load())
 
 		#search_replace(self.hash_dict,data,action='get_hash')
 		#search_replace(self.parameters,data,action='load')
