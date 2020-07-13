@@ -1,15 +1,13 @@
 from IPython import embed
 import importlib
-import paips
-#import paips.utils as utils
-#from paips.utils.config_processors import embed_configs
-
-from paips.utils.settings import symbols
-
-from paips.core import TaskGraph
 import argparse
-from kahnfigh import Config
+
+import paips
+from paips.core import TaskGraph
+from paips.utils.settings import symbols
 from paips.utils import logger
+from kahnfigh import Config
+from kahnfigh.utils import IgnorableTag
 
 def main():
     argparser = argparse.ArgumentParser(description='Run pipeline from configs')
@@ -19,13 +17,18 @@ def main():
     args = vars(argparser.parse_args())
 
     #Get main config
-    main_config = Config(args['config_path'])
+    #By default, yaml uses custom tags marked as !, however, we want to use it in a more general way even in dictionaries.
+    #To avoid raising exceptions, an ignorable tag is created which will return the string unchanged for later processing
+    ignorable_tags = ['!nocache','!loop','!yaml','!var']
+    main_config = Config(args['config_path'], special_tags=[IgnorableTag(tag) for tag in ignorable_tags])
+
     #Get global variables and set to default values the missing ones
     global_config = {'cache': not args['no_caching'],
                      'in_memory': False,
-                     'cache_dir': 'cache',
-                     'output_dir': 'experiments',
-                     'cache_compression': 3}                   
+                     'cache_path': 'cache',
+                     'output_path': 'experiments',
+                     'cache_compression': 3}
+
     global_config.update(main_config.get('global',{}))
 
     paips_logger = logger.get_logger('Paips','logs')

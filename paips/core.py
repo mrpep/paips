@@ -4,13 +4,19 @@ import copy
 import joblib
 from pathlib import Path
 import networkx as nx
+from kahnfigh import Config
+from kahnfigh.core import find_path
+from ruamel.yaml import YAML
+import os
 
 class TaskIO():
-	def __init__(self, data, hash_val, iotype = 'data', name = None):
+	def __init__(self, data, hash_val, iotype = 'data', name = None, parent = None):
 		self.hash = hash_val
 		self.data = data
 		self.iotype = iotype
 		self.name = name
+		self.parent = parent
+		self.link_path = None
 
 	def get_hash(self):
 		return self.hash
@@ -21,21 +27,32 @@ class TaskIO():
 		elif self.iotype == 'path':
 			return joblib.load(self.data)
 
-	def save(self, path, compression_level = 0):
-		destination_path = Path(path,self.hash)
-		if not destination_path.exists():
-			destination_path.mkdir(parents=True)
+	def save(self, cache_path=None, export_path=None, compression_level = 0):
+		self.address = Path(cache_path,self.hash)
+		if not self.address.exists():
+			self.address.mkdir(parents=True)
 			
-		joblib.dump(self.data,Path(destination_path,self.name),compress=compression_level)
+		#Save cache:
+		joblib.dump(self.data,Path(self.address,self.name),compress=compression_level)
 
-		return TaskIO(Path(destination_path,self.name),self.hash,iotype='path',name=self.name)
+		self.create_link(self.address,export_path)
+
+		return TaskIO(Path(self.address,self.name),self.hash,iotype='path',name=self.name)
+
+	def create_link(self, cache_path, export_path):
+		#Create symbolic link to cache:
+		self.link_path = Path(export_path,self.parent)
+		if not self.link_path.exists():
+			os.symlink(str(cache_path.absolute()),str(self.link_path.absolute()))
+
 
 class Task():
 	def __init__(self, parameters, global_parameters=None, name=None, logger=None):
 
 		self.global_parameters = {'cache': True,
 							 'cache_path': 'cache',
-							 'cache_compression': 0}
+							 'cache_compression': 0,
+							 'output_path': 'experiments'}
 
 		if global_parameters:
 			self.global_parameters.update(global_parameters)
@@ -45,7 +62,8 @@ class Task():
 
 		self.parameters = parameters
 
-		self.output_names =	get_delete_param(self.parameters,'output_names',['out'])
+		#self.output_names =	get_delete_param(self.parameters,'output_names',['out'])
+		self.output_names = self.parameters.pop('output_names',['out'])
 		self.cache = get_delete_param(self.parameters,'cache',self.global_parameters['cache'])
 		self.in_memory = get_delete_param(self.parameters,'in_memory',self.global_parameters['in_memory'])
 
@@ -54,9 +72,19 @@ class Task():
 
 		self.hash_dict = copy.deepcopy(self.parameters)
 
+		#Remove not cacheable parameters
+		if not isinstance(self.hash_dict, Config):
+			self.hash_dict = Config(self.hash_dict)
+		if not isinstance(self.parameters, Config):
+			self.parameters = Config(self.parameters)
+
+		_ = self.hash_dict.find_path(symbols['nocache'],mode='startswith',action='remove_value')
+		_ = self.parameters.find_path(symbols['nocache'],mode='startswith',action='remove_substring')
+
 	def search_dependencies(self):
-		search_dependencies(self.parameters,self.dependencies)
-		self.dependencies = list(set(self.dependencies))
+		dependency_paths = self.parameters.find_path(symbols['dot'],mode='contains')
+		#search_dependencies(self.parameters,self.dependencies)
+		self.dependencies = [self.parameters[path].split(symbols['dot'])[0] for path in dependency_paths]
 		return self.dependencies
 
 	def check_valid_args(self):
@@ -68,8 +96,13 @@ class Task():
 		"""
 		Replace TaskIOs in parameters with the corresponding data. Also adds its associated hashes to the hash dictionary
 		"""
-		search_replace(self.hash_dict,data,action='get_hash')
-		search_replace(self.parameters,data,action='load')
+		for k,v in data.items():
+			paths = self.hash_dict.find_path(k,action='replace',replace_value=v.get_hash())
+			if len(paths) > 0:
+				self.parameters.find_path(k,action='replace',replace_value=v.load())
+
+		#search_replace(self.hash_dict,data,action='get_hash')
+		#search_replace(self.parameters,data,action='load')
 
 	def get_hash(self):
 		return make_hash(self.hash_dict)
@@ -88,20 +121,25 @@ class Task():
 		cache_paths = self.find_cache()
 		if self.cache and cache_paths:
 			self.logger.info('Caching task {}'.format(self.name))
-			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem) for cache_i in cache_paths}
+			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,parent=self.name) for cache_i in cache_paths}
+			for task_name, task in out_dict.items():
+				task.create_link(Path(task.data).parent,self.global_parameters['output_path'])
 		else:
 			self.logger.info('Running task {}'.format(self.name))
 			outs = self.process()
 			if not isinstance(outs,tuple):
 				outs = (outs,)
 
-			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],out_name): TaskIO(out_val,self.task_hash,iotype='data',name=out_name) for out_name, out_val in zip(self.output_names,outs)}
+			out_dict = {'{}{}{}'.format(self.name,symbols['dot'],out_name): TaskIO(out_val,self.task_hash,iotype='data',name=out_name,parent=self.name) for out_name, out_val in zip(self.output_names,outs)}
 
 			if not self.in_memory:
 				self.logger.info('Saving outputs from task {}'.format(self.name))
 				for k,v in out_dict.items():
 					if v.iotype == 'data':
-						out_dict[k] = v.save(self.global_parameters['cache_path'],compression_level=self.global_parameters['cache_compression'])	
+						out_dict[k] = v.save(
+							cache_path=self.global_parameters['cache_path'],
+							export_path=self.global_parameters['output_path'],
+							compression_level=self.global_parameters['cache_compression'])	
 
 		return out_dict 
 

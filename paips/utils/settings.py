@@ -1,5 +1,7 @@
 symbols = {
 'dot':'->',
-'insert_config':'$$',
-'insert_variable': '$'
+'insert_config':'!yaml ',
+'insert_variable': '!var ',
+'nocache': '!nocache ',
+'map': '!map'
 }

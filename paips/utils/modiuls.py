@@ -28,12 +28,6 @@ def get_modules(module_paths):
     Get all the modules where task definitions are found
     """
 
-    #module_paths = ['core_tasks.py']
-    #if 'modules' in self.config:
-    #   module_paths_ = self.config['modules']
-    #   if not isinstance(module_paths,list):
-    #       module_paths_ = [module_paths_]
-    #   module_paths.extend(module_paths_)
     task_modules = []
     for module_path in module_paths:
         try:
