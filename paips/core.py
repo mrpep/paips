@@ -1,6 +1,7 @@
 from .utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module, make_graph_from_tasks, symbols
 from IPython import embed
 import copy
+import numpy as np
 import joblib
 from pathlib import Path
 import networkx as nx
@@ -189,7 +190,10 @@ class TaskGraph(Task):
 		"""
 		Use topological sort to get the order of execution. If a target task is specified, find the shortest path.
 		"""
-		self.dependency_order = list(nx.topological_sort(self.graph))
+		if len(self.graph.nodes) == 0 and len(self.task_nodes)>0:
+			self.dependency_order = [task for task_name, task in self.task_nodes.items()]
+		else:
+			self.dependency_order = list(nx.topological_sort(self.graph))
 
 		if self.target:
 			#Si tengo que ejecutar el DAG hasta cierto nodo, primero me fijo que nodo es:
@@ -213,7 +217,17 @@ class TaskGraph(Task):
 			pruned_graph = make_graph_from_tasks(reduced_task_nodes)
 			#Topological sort del grafo resultante me da las dependencias para el target task:
 			self.dependency_order = list(nx.topological_sort(pruned_graph))
-			
+			self.graph = pruned_graph
+
+		priority_nodes = [node for node in self.graph.nodes if 'priorize' in node.parameters and node.parameters['priorize']]
+		
+		if len(priority_nodes)>0:
+			all_sorts = [top for top in nx.all_topological_sorts(self.graph)]
+			sort_score = np.array([sum([top.index(pnode) for pnode in priority_nodes]) for top in all_sorts])
+			best_sort = all_sorts[np.argmin(sort_score)]
+
+			self.dependency_order = best_sort
+
 	def _clear_tasksio_not_needed(self, remaining_tasks):
 		needed_tasks = [list(self.graph.predecessors(node)) for node in self.graph.nodes if node.name in remaining_tasks]
 		needed_tasks = [task.name for predecessors in needed_tasks for task in predecessors]
@@ -233,6 +247,7 @@ class TaskGraph(Task):
 		ToDo:
 		- Loop execution mode
 		"""
+
 
 		remaining_tasks = [task.name for task in self.dependency_order]
 		self.tasks_io = {}

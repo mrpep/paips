@@ -7,20 +7,26 @@ from paips.core import TaskGraph
 from paips.utils.settings import symbols
 from paips.utils import logger
 from kahnfigh import Config
-from kahnfigh.utils import IgnorableTag
+from kahnfigh.utils import IgnorableTag, merge_configs
 
 def main():
     argparser = argparse.ArgumentParser(description='Run pipeline from configs')
     #argparser.add_argument('config_path', help='Path to YAML config file for running experiment', nargs='+')
-    argparser.add_argument('config_path', help='Path to YAML config file for running experiment')
+    argparser.add_argument('config_path', help='Path to YAML config file for running experiment', nargs='+')
     argparser.add_argument('--no-caching', dest='no_caching', help='Run all', action='store_true', default=False)
     args = vars(argparser.parse_args())
 
     #Get main config
     #By default, yaml uses custom tags marked as !, however, we want to use it in a more general way even in dictionaries.
     #To avoid raising exceptions, an ignorable tag is created which will return the string unchanged for later processing
+    
     ignorable_tags = ['!nocache','!loop','!yaml','!var']
-    main_config = Config(args['config_path'], special_tags=[IgnorableTag(tag) for tag in ignorable_tags])
+    special_tags = [IgnorableTag(tag) for tag in ignorable_tags]
+
+    configs = [Config(path_i, special_tags = special_tags) for path_i in args['config_path']]
+    main_config = merge_configs(configs)
+
+    #main_config = Config(args['config_path'], special_tags=[IgnorableTag(tag) for tag in ignorable_tags])
 
     #Get global variables and set to default values the missing ones
     global_config = {'cache': not args['no_caching'],
