@@ -13,6 +13,14 @@ from .cache import *
 from .graphs import *
 from .settings import symbols
 
+def apply_mods(modstr,config):
+    if modstr is not None:
+        mods = modstr.split('&')
+        for mod in mods:
+            if '=' in mod:
+                mod_parts = mod.split('=')
+                config[mod_parts[0]] = mod_parts[1]
+
 def get_delete_param(dictionary,param,default_value=None):
     if param in dictionary:
         return dictionary.pop(param)
