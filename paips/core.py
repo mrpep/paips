@@ -35,7 +35,6 @@ class TaskIO():
 			
 		#Save cache:
 		joblib.dump(self.data,Path(self.address,self.name),compress=compression_level)
-
 		self.create_link(self.address,export_path)
 
 		return TaskIO(Path(self.address,self.name),self.hash,iotype='path',name=self.name)
@@ -57,6 +56,9 @@ class Task():
 
 		if global_parameters:
 			self.global_parameters.update(global_parameters)
+
+		if not Path(self.global_parameters['output_path']).exists():
+			Path(self.global_parameters['output_path']).mkdir(parents=True)
 
 		self.name = name
 		self.valid_args=[]
@@ -82,8 +84,15 @@ class Task():
 		_ = self.hash_dict.find_path(symbols['nocache'],mode='startswith',action='remove_value')
 		_ = self.parameters.find_path(symbols['nocache'],mode='startswith',action='remove_substring')
 
+		fname = Path(self.global_parameters['output_path'],'configs','{}.yaml'.format(self.name))
+		self.parameters.save(fname)
+
 	def search_dependencies(self):
+		stop_propagate_dot = self.parameters.get('stop_propagate_dot',None)
 		dependency_paths = self.parameters.find_path(symbols['dot'],mode='contains')
+		#Esto es porque dienen tambien usa el simbolo -> entonces debo decir que si encuentra ahi no lo tenga en cuenta.
+		if stop_propagate_dot:
+			dependency_paths = [p for p in dependency_paths if not p.startswith(stop_propagate_dot)]
 		#search_dependencies(self.parameters,self.dependencies)
 		self.dependencies = [self.parameters[path].split(symbols['dot'])[0] for path in dependency_paths]
 		return self.dependencies
@@ -118,6 +127,7 @@ class Task():
 	def run(self):
 		self.task_hash = self.get_hash()
 		self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
+		self.export_dir = Path(self.global_parameters['output_path'],self.name)
 		
 		cache_paths = self.find_cache()
 		if self.cache and cache_paths:
@@ -247,7 +257,6 @@ class TaskGraph(Task):
 		ToDo:
 		- Loop execution mode
 		"""
-
 
 		remaining_tasks = [task.name for task in self.dependency_order]
 		self.tasks_io = {}
