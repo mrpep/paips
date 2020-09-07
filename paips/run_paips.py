@@ -9,6 +9,8 @@ from paips.utils.settings import symbols
 from paips.utils import logger, apply_mods
 from kahnfigh import Config
 from kahnfigh.utils import IgnorableTag, merge_configs
+from ruamel.yaml import YAML
+from io import StringIO
 
 def main():
     argparser = argparse.ArgumentParser(description='Run pipeline from configs')
@@ -23,7 +25,7 @@ def main():
     #By default, yaml uses custom tags marked as !, however, we want to use it in a more general way even in dictionaries.
     #To avoid raising exceptions, an ignorable tag is created which will return the string unchanged for later processing
     
-    ignorable_tags = ['!nocache','!loop','!yaml','!var']
+    ignorable_tags = ['!nocache','!loop','!yaml','!var','!parallel-map']
     special_tags = [IgnorableTag(tag) for tag in ignorable_tags]
 
     configs = [Config(path_i, special_tags = special_tags) for path_i in args['config_path']]
@@ -49,10 +51,49 @@ def main():
     #main_config.replace_on_symbol(symbols['insert_variable'],lambda x: global_config[x])
     main_config.find_path(symbols['insert_config'],mode='startswith',action=lambda x: Config(x.split(symbols['insert_config'])[-1]))
     main_config.find_path(symbols['insert_variable'],mode='startswith',action=lambda x: global_config[x.split(symbols['insert_variable'])[-1]])
+
+    cluster_config = main_config.get('cluster_config',None)
+    if cluster_config:
+        if cluster_config['manager'] == 'ray':
+            import ray
+            ray.init()
+
+    def task_parameters_level_from_path(path):
+        l = path.split('/')
+        idx_parent_tasks = len(l) - 1 - l[::-1].index('Tasks')
+        parent_path = '/'.join(l[:idx_parent_tasks+2])
+        return parent_path
+
+    #For every task with a variable that we want to loop, 
+    #we find the tag and create a parameter 'parallel' which holds the names
+    #of the loopable params, and adds a '!nocache' so that it is not cached
+
+    parallel_paths = main_config.find_path(symbols['distributed-pool'],mode='startswith',action='remove_substring')
+    parallel_paths = [(task_parameters_level_from_path(p),p.split('/')[-1]) for p in parallel_paths]
+    parallel_paths_ = {}
+
+    for p in parallel_paths:
+        path = p[0]+'/parallel'
+        if path not in parallel_paths_:
+            parallel_paths_[path] = [p[1]]
+        else:
+            parallel_paths_[path].append(p[1])
     
+    yaml = YAML()
+    for k,v in parallel_paths_.items():
+        v_yaml_stream = StringIO()
+        yaml.dump(v,v_yaml_stream)
+        parallel_paths_[k] = symbols['nocache'] + ' ' + v_yaml_stream.getvalue()
+        v_yaml_stream.close()
+
+    main_config.update(parallel_paths_)
+
     main_task = TaskGraph(main_config,global_config,name='MainTask',logger=paips_logger)
     main_task.run()
+    ray.shutdown()
 
 if __name__ == '__main__':
-
-    main()
+    try:
+        main()
+    finally:
+        ray.shutdown()

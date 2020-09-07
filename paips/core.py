@@ -73,8 +73,13 @@ class Task():
 		self.dependencies = []
 		self.logger = logger
 
-		self.hash_dict = copy.deepcopy(self.parameters)
+		self.make_hash_dict()
 
+		fname = Path(self.global_parameters['output_path'],'configs','{}.yaml'.format(self.name))
+		self.parameters.save(fname)
+
+	def make_hash_dict(self):
+		self.hash_dict = copy.deepcopy(self.parameters)
 		#Remove not cacheable parameters
 		if not isinstance(self.hash_dict, Config):
 			self.hash_dict = Config(self.hash_dict)
@@ -84,17 +89,20 @@ class Task():
 		_ = self.hash_dict.find_path(symbols['nocache'],mode='startswith',action='remove_value')
 		_ = self.parameters.find_path(symbols['nocache'],mode='startswith',action='remove_substring')
 
-		fname = Path(self.global_parameters['output_path'],'configs','{}.yaml'.format(self.name))
-		self.parameters.save(fname)
-
 	def search_dependencies(self):
 		stop_propagate_dot = self.parameters.get('stop_propagate_dot',None)
 		dependency_paths = self.parameters.find_path(symbols['dot'],mode='contains')
+		#dependency_paths = [p for p in dependency_paths if 'Tasks' not in ]
+		if self.__class__.__name__ == 'TaskGraph':
+			dependency_paths = [p for p in dependency_paths if 'Tasks' not in p]
 		#Esto es porque dienen tambien usa el simbolo -> entonces debo decir que si encuentra ahi no lo tenga en cuenta.
 		if stop_propagate_dot:
 			dependency_paths = [p for p in dependency_paths if not p.startswith(stop_propagate_dot)]
 		#search_dependencies(self.parameters,self.dependencies)
 		self.dependencies = [self.parameters[path].split(symbols['dot'])[0] for path in dependency_paths]
+		self.dependencies = [d for d in self.dependencies if d != 'self']
+
+
 		return self.dependencies
 
 	def check_valid_args(self):
@@ -124,6 +132,12 @@ class Task():
 		cache_paths = find_cache(self.task_hash,self.global_parameters['cache_path'])
 		return cache_paths
 
+	def worker_wrapper(self,x):
+		for k, v in zip(self.parameters['parallel'],x):
+			self.parameters[k] = v
+		out = self.process()
+		return out
+
 	def run(self):
 		self.task_hash = self.get_hash()
 		self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
@@ -137,7 +151,16 @@ class Task():
 				task.create_link(Path(task.data).parent,self.global_parameters['output_path'])
 		else:
 			self.logger.info('Running task {}'.format(self.name))
-			outs = self.process()
+			if 'parallel' not in self.parameters:
+				outs = self.process()
+			else:
+				from ray.util.multiprocessing.pool import Pool
+				iterable_vars = list(zip(*[self.parameters[k] for k in self.parameters['parallel']]))
+
+				pool = Pool()
+				outs = pool.map(self.worker_wrapper,iterable_vars)
+				#May require postprocessing
+
 			if not isinstance(outs,tuple):
 				outs = (outs,)
 
@@ -170,6 +193,13 @@ class TaskGraph(Task):
 		#Get tasks execution order
 		self.get_dependency_order()
 
+	def send_dependency_data(self,data):
+		#Override task method so that in this case, data keeps being a TaskIO
+		for k,v in data.items():
+			paths = self.hash_dict.find_path(k,action=lambda x: v.get_hash())
+			if len(paths) > 0:
+				self.parameters.find_path(k,action=lambda x: v)
+
 	def load_modules(self):
 		self.task_modules = get_modules(self.external_modules)
 
@@ -180,12 +210,19 @@ class TaskGraph(Task):
 		self.task_nodes = {}
 		for task_name, task_config in self.parameters['Tasks'].items():
 			task_class = task_config['class']
-			task_obj = [getattr(module,task_class) for module in self.task_modules if task_class in get_classes_in_module(module)]
-			if len(task_obj) == 0:
-				raise Exception('{} not recognized as a task'.format(task_class))
-			elif len(task_obj) > 1:
-				raise Exception('{} found in multiple task modules. Rename the task in your module to avoid name collisions'.format(task_class))
-			task_obj = task_obj[0]
+			if task_class == 'TaskGraph':
+				task_obj = TaskGraph
+				task_modules = task_config.get('modules',None)
+				if task_modules is None:
+					task_config['modules'] = self.parameters['modules']
+			else:
+				task_obj = [getattr(module,task_class) for module in self.task_modules if task_class in get_classes_in_module(module)]
+				if len(task_obj) == 0:
+					raise Exception('{} not recognized as a task'.format(task_class))
+				elif len(task_obj) > 1:
+					raise Exception('{} found in multiple task modules. Rename the task in your module to avoid name collisions'.format(task_class))
+				task_obj = task_obj[0]
+
 			task_instance = task_obj(copy.deepcopy(task_config),self.global_parameters,task_name,self.logger)
 			self.task_nodes[task_name] = task_instance
 			#self.graph.add_node(task_instance)
@@ -259,7 +296,14 @@ class TaskGraph(Task):
 		"""
 
 		remaining_tasks = [task.name for task in self.dependency_order]
+		
 		self.tasks_io = {}
+
+		inputs = self.parameters.get('in',None)
+		if inputs:
+			for k,v in inputs.items():
+				self.tasks_io['self->{}'.format(k)] = v
+			
 		for task in self.dependency_order:
 			task.send_dependency_data(self.tasks_io)
 			out_dict = task.run()
