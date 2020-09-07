@@ -52,7 +52,13 @@ def main():
     main_config.find_path(symbols['insert_config'],mode='startswith',action=lambda x: Config(x.split(symbols['insert_config'])[-1]))
     main_config.find_path(symbols['insert_variable'],mode='startswith',action=lambda x: global_config[x.split(symbols['insert_variable'])[-1]])
 
-    cluster_config = main_config.get('cluster_config',None)
+    default_cluster_config = {
+    'manager': 'ray',
+    'n_cores': 1,
+    'niceness': 20
+    }
+
+    cluster_config = main_config.get('cluster_config',default_cluster_config)
     if cluster_config:
         if cluster_config['manager'] == 'ray':
             import ray
@@ -78,7 +84,11 @@ def main():
             parallel_paths_[path] = [p[1]]
         else:
             parallel_paths_[path].append(p[1])
-    
+        if 'n_cores' not in main_config[p[0]]:
+            main_config[p[0]+'/n_cores'] = cluster_config['n_cores']
+        if 'niceness' not in main_config[p[0]]:
+            main_config[p[0]+'/niceness'] = cluster_config['niceness']
+            
     yaml = YAML()
     for k,v in parallel_paths_.items():
         v_yaml_stream = StringIO()
