@@ -25,7 +25,8 @@ def main():
     #By default, yaml uses custom tags marked as !, however, we want to use it in a more general way even in dictionaries.
     #To avoid raising exceptions, an ignorable tag is created which will return the string unchanged for later processing
     
-    ignorable_tags = ['!nocache','!loop','!yaml','!var','!parallel-map']
+    #ignorable_tags = ['!nocache','!loop','!yaml','!var','!parallel-map','!map']
+    ignorable_tags = [v.strip() for k,v in symbols.items() if v.startswith('!')]
     special_tags = [IgnorableTag(tag) for tag in ignorable_tags]
 
     configs = [Config(path_i, special_tags = special_tags) for path_i in args['config_path']]
@@ -75,7 +76,7 @@ def main():
     #of the loopable params, and adds a '!nocache' so that it is not cached
 
     parallel_paths = main_config.find_path(symbols['distributed-pool'],mode='startswith',action='remove_substring')
-    parallel_paths = [(task_parameters_level_from_path(p),p.split('/')[-1]) for p in parallel_paths]
+    parallel_paths = [(task_parameters_level_from_path(p),p.split(task_parameters_level_from_path(p) + '/')[-1]) for p in parallel_paths]
     parallel_paths_ = {}
 
     for p in parallel_paths:
@@ -88,15 +89,35 @@ def main():
             main_config[p[0]+'/n_cores'] = cluster_config['n_cores']
         if 'niceness' not in main_config[p[0]]:
             main_config[p[0]+'/niceness'] = cluster_config['niceness']
-            
+
+    map_paths = main_config.find_path(symbols['serial-map'],mode='startswith',action='remove_substring')
+    map_paths = [(task_parameters_level_from_path(p),p.split(task_parameters_level_from_path(p) + '/')[-1]) for p in map_paths]
+    map_paths_ = {}
+
+    for p in map_paths:
+        path = p[0] + '/map_vars'
+        if path not in map_paths_:
+            map_paths_[path] = [p[1]]
+        else:
+            map_paths_[path].append(p[1])
+
     yaml = YAML()
     for k,v in parallel_paths_.items():
         v_yaml_stream = StringIO()
         yaml.dump(v,v_yaml_stream)
-        parallel_paths_[k] = symbols['nocache'] + ' ' + v_yaml_stream.getvalue()
+        #parallel_paths_[k] = symbols['nocache'] + ' ' + v_yaml_stream.getvalue()
+        parallel_paths_[k] = symbols['nocache'] + ' ' + str(v)
+        v_yaml_stream.close()
+
+    for k,v in map_paths_.items():
+        v_yaml_stream = StringIO()
+        yaml.dump(v,v_yaml_stream)
+        #map_paths_[k] = symbols['nocache'] + ' ' + v_yaml_stream.getvalue()
+        map_paths_[k] = symbols['nocache'] + ' ' + str(v)
         v_yaml_stream.close()
 
     main_config.update(parallel_paths_)
+    main_config.update(map_paths_)
 
     main_task = TaskGraph(main_config,global_config,name='MainTask',logger=paips_logger)
     main_task.run()

@@ -1,7 +1,7 @@
 import pickle
 from pprint import pformat as pf
 
-def pickle_diagnose(obj, max_depth=10):
+def pickle_diagnose(obj, max_depth=100):
     """
     If something throws an exception when pickled, this helper will guide us to the problem.
     """

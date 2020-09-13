@@ -7,5 +7,5 @@ def make_graph_from_tasks(task_nodes):
 		if len(dependencies)>0:
 			for dependency in dependencies:
 				graph.add_edge(task_nodes[dependency],task)
-
+				
 	return graph

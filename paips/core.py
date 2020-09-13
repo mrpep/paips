@@ -1,4 +1,4 @@
-from .utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module, make_graph_from_tasks, symbols
+from .utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module, make_graph_from_tasks, symbols, method_wrapper
 from IPython import embed
 import copy
 import numpy as np
@@ -9,6 +9,7 @@ from kahnfigh import Config
 from kahnfigh.core import find_path
 from ruamel.yaml import YAML
 import os
+import ray
 
 class TaskIO():
     def __init__(self, data, hash_val, iotype = 'data', name = None, parent = None):
@@ -74,6 +75,7 @@ class Task():
         self.logger = logger
 
         self.make_hash_dict()
+        self.initial_parameters = copy.deepcopy(self.parameters)
 
         fname = Path(self.global_parameters['output_path'],'configs','{}.yaml'.format(self.name))
         self.parameters.save(fname)
@@ -94,7 +96,7 @@ class Task():
         dependency_paths = self.parameters.find_path(symbols['dot'],mode='contains')
         #dependency_paths = [p for p in dependency_paths if 'Tasks' not in ]
         if self.__class__.__name__ == 'TaskGraph':
-            dependency_paths = [p for p in dependency_paths if 'Tasks' not in p]
+            dependency_paths = [p for p in dependency_paths if ('Tasks' not in p) and (not p.startswith('outputs'))]
         #Esto es porque dienen tambien usa el simbolo -> entonces debo decir que si encuentra ahi no lo tenga en cuenta.
         if stop_propagate_dot:
             dependency_paths = [p for p in dependency_paths if not p.startswith(stop_propagate_dot)]
@@ -104,6 +106,10 @@ class Task():
 
 
         return self.dependencies
+
+    def reset_task_state(self):
+        self.parameters = copy.deepcopy(self.initial_parameters)
+        self.make_hash_dict()
 
     def check_valid_args(self):
         for k in self.parameters.keys():
@@ -132,53 +138,141 @@ class Task():
         cache_paths = find_cache(self.task_hash,self.global_parameters['cache_path'])
         return cache_paths
 
-    def worker_wrapper(self,x):
-        for k, v in zip(self.parameters['parallel'],x):
-            self.parameters[k] = v
-        out = self.process()
-        return out
+    def _process_outputs(self,outs):
+        if isinstance(outs,ray._raylet.ObjectRef):
+            filter_outputs = self.parameters.get('outputs',None)
+            if filter_outputs:
+                self.output_names = []
+                for k,v in filter_outputs.items():
+                    self.output_names.append(k)
 
-    def run(self):
+        if not isinstance(outs,tuple):
+            outs = (outs,)
+
+        out_dict = {'{}{}{}'.format(self.name,symbols['dot'],out_name): TaskIO(out_val,self.get_hash(),iotype='data',name=out_name,parent=self.name) for out_name, out_val in zip(self.output_names,outs)}
+
+        if not self.in_memory:
+            self.logger.info('{}: Saving outputs'.format(self.name))
+            for k,v in out_dict.items():
+                if v.iotype == 'data':
+                    out_dict[k] = v.save(
+                        cache_path=self.global_parameters['cache_path'],
+                        export_path=self.global_parameters['output_path'],
+                        compression_level=self.global_parameters['cache_compression'])
+
+        return out_dict
+
+    def _parallel_run_ray(self,run_async = False):
+        from ray.util.multiprocessing.pool import Pool
+
+        def set_niceness(niceness): # pool initializer
+            os.nice(niceness)
+
+        def worker_wrapper(x):
+            for k, v in zip(self.parameters['parallel'],x):
+                self.parameters[k] = v
+            out = self.process()
+            return out
+
+        iterable_vars = list(zip(*[self.parameters[k] for k in self.parameters['parallel']]))
+        pool = Pool(processes=self.parameters['n_cores'], initializer=set_niceness,initargs=(self.parameters['niceness'],))
+        outs = pool.map(worker_wrapper,iterable_vars)
+
+        return self._process_outputs(outs)
+
+    def _serial_run(self,run_async=False):
+        if run_async:
+            import ray
+            def run_process_async(self): 
+                return self.process()
+            outs = ray.remote(run_process_async).remote(self)
+        else:
+            outs = self.process()
+        return self._process_outputs(outs)
+
+    def _serial_map(self,iteration=None,run_async=False):
+        self.initial_parameters = copy.deepcopy(self.parameters)
+        self.original_name = copy.deepcopy(self.name)
+
+        map_var_names = self.parameters['map_vars']
+        map_vars = zip(*[self.parameters[k].load() for k in map_var_names])
+
+        if iteration is not None:
+            map_vars = list(map_vars)
+            map_vars = [map_vars[iteration]]
+            initial_iter = iteration
+        else:
+            initial_iter = 0
+
+        outs = []
+        
+        for i, iteration in enumerate(map_vars):
+            self.parameters = copy.deepcopy(self.initial_parameters)
+            self.parameters['iter'] = i + initial_iter
+            self.name = self.original_name + '_{}'.format(i + initial_iter)
+            self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
+            self.export_dir = Path(self.global_parameters['output_path'],self.name)
+
+            self.make_hash_dict()
+            self.task_hash = self.get_hash()
+
+            for k, var in zip(map_var_names,iteration):
+                self.parameters[k] = TaskIO(var,self.task_hash,iotype='data',name=k,parent=self.name)
+
+            cache_paths = self.find_cache()
+            if self.cache and cache_paths:
+                self.logger.info('Caching task {}'.format(self.name))
+                out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,parent=self.name) for cache_i in cache_paths}
+                for task_name, task in out_dict.items():
+                    task.create_link(Path(task.data).parent,self.global_parameters['output_path'])
+            else:
+                outs.append(self._serial_run(run_async=run_async))
+
+        #Restore original parameters
+        self.parameters = copy.deepcopy(self.initial_parameters)
+
+        return outs
+
+    def run(self, iteration=None):
+        self.make_hash_dict()
         self.task_hash = self.get_hash()
         self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
         self.export_dir = Path(self.global_parameters['output_path'],self.name)
+        self.return_as_function = self.parameters.get('return_as_function',False)
+        self.return_as_class = self.parameters.get('return_as_class',False)
         
         cache_paths = self.find_cache()
         if self.cache and cache_paths:
-            self.logger.info('Caching task {}'.format(self.name))
+            self.logger.info('{}: Caching'.format(self.name))
             out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,parent=self.name) for cache_i in cache_paths}
             for task_name, task in out_dict.items():
                 task.create_link(Path(task.data).parent,self.global_parameters['output_path'])
         else:
-            self.logger.info('Running task {}'.format(self.name))
-            if 'parallel' not in self.parameters:
-                outs = self.process()
+            run_async = self.parameters.get('async',False)
+            if self.return_as_function:
+                self.logger.info('{}: Lazy run'.format(self.name))
+                self.parameters['return_as_function'] = False
+                out_dict = self._process_outputs(self.process)
+            elif self.return_as_class:
+                self.logger.info('{}: Lazy run'.format(self.name))
+                self.parameters['return_as_class'] = False
+                out_dict = self._process_outputs(self)
+            elif (('parallel' not in self.parameters) and ('map_vars' not in self.parameters)):
+                self.logger.info('{}: Running'.format(self.name))
+                out_dict = self._serial_run(run_async=run_async)
+            elif 'parallel' in self.parameters and not 'map_vars' in self.parameters:
+                self.logger.info('{}: Running with pool of {} workers'.format(self.name, self.parameters['n_cores']))
+                out_dict = self._parallel_run_ray(run_async=run_async)
+            elif 'map_vars' in self.parameters and not 'parallel' in self.parameters:
+                if iteration is not None:
+                    self.logger.info('{}: Running iteration {}'.format(self.name, iteration))
+                else:
+                    self.logger.info('{}: Running multiple iterations'.format(self.name))
+                out_dict = self._serial_map(iteration=iteration,run_async=run_async)
             else:
-                from ray.util.multiprocessing.pool import Pool
-                iterable_vars = list(zip(*[self.parameters[k] for k in self.parameters['parallel']]))
-                
-                def set_niceness(niceness): # pool initializer
-                    os.nice(niceness)
+                raise Exception('Mixing !parallel-map and !map in a task is not allowed')
 
-                pool = Pool(processes=self.parameters['n_cores'], initializer=set_niceness,initargs=(self.parameters['niceness'],))
-                outs = pool.map(self.worker_wrapper,iterable_vars)
-                #May require postprocessing
-
-            if not isinstance(outs,tuple):
-                outs = (outs,)
-
-            out_dict = {'{}{}{}'.format(self.name,symbols['dot'],out_name): TaskIO(out_val,self.task_hash,iotype='data',name=out_name,parent=self.name) for out_name, out_val in zip(self.output_names,outs)}
-
-            if not self.in_memory:
-                self.logger.info('Saving outputs from task {}'.format(self.name))
-                for k,v in out_dict.items():
-                    if v.iotype == 'data':
-                        out_dict[k] = v.save(
-                            cache_path=self.global_parameters['cache_path'],
-                            export_path=self.global_parameters['output_path'],
-                            compression_level=self.global_parameters['cache_compression'])  
-
-        return out_dict 
+        return out_dict
 
 class TaskGraph(Task):
     def __init__(self,parameters,global_parameters=None, name=None, logger=None):
@@ -196,7 +290,7 @@ class TaskGraph(Task):
         #Get tasks execution order
         self.get_dependency_order()
 
-    def send_dependency_data(self,data):
+    def send_dependency_data(self,data,ignore_map=False):
         #Override task method so that in this case, data keeps being a TaskIO
         for k,v in data.items():
             paths = self.hash_dict.find_path(k,action=lambda x: v.get_hash())
@@ -226,9 +320,13 @@ class TaskGraph(Task):
                     raise Exception('{} found in multiple task modules. Rename the task in your module to avoid name collisions'.format(task_class))
                 task_obj = task_obj[0]
 
+            #run_async = task_config.get('async',False)
+            #if run_async:
+            #task_instance = ActorWrapper(copy.deepcopy(task_config),self.global_parameters,task_name,self.logger,actor = task_obj)
+            #else:
             task_instance = task_obj(copy.deepcopy(task_config),self.global_parameters,task_name,self.logger)
+            
             self.task_nodes[task_name] = task_instance
-            #self.graph.add_node(task_instance)
 
     def connect_tasks(self):
         """
@@ -288,7 +386,9 @@ class TaskGraph(Task):
             if task_producer not in needed_tasks:
                 self.tasks_io.pop(io_name)
 
-    def process(self):
+    def process(self,params=None):
+        if params is not None:
+            self.parameters.update(params)
         """
         Runs each task in order, gather outputs and inputs.
         """
@@ -306,15 +406,43 @@ class TaskGraph(Task):
         if inputs:
             for k,v in inputs.items():
                 self.tasks_io['self->{}'.format(k)] = v
+            #self.send_dependency_data(self.tasks_io,ignore_map=True)
             
         for task in self.dependency_order:
+            if 'iter' in self.parameters:
+                task.parameters['iter'] = self.parameters['iter']
+
             task.send_dependency_data(self.tasks_io)
             out_dict = task.run()
+
             self.tasks_io.update(out_dict)
             remaining_tasks.remove(task.name)
-            self._clear_tasksio_not_needed(remaining_tasks)
+            #self._clear_tasksio_not_needed(remaining_tasks)
 
-        return [self.tasks_io]
+        filter_outputs = self.parameters.get('outputs',None)
+        task_out = []
+        if filter_outputs:
+            self.output_names = []
+            for k,v in filter_outputs.items():
+                self.output_names.append(k)
+                task_out.append(self.tasks_io[v].load())
+        else:
+            task_out = [self.tasks_io]
+
+        return task_out
+
+    def __getstate__(self):
+        if 'task_modules' in self.__dict__:
+            del self.__dict__['task_modules']
+
+        return self.__dict__
+
+    def __setstate__(self,d):
+        if 'external_modules' in d:
+            task_modules = get_modules(d['external_modules'])
+            d['task_modules'] = task_modules
+
+        self.__dict__ = d
     
 
 

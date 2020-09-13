@@ -12,6 +12,8 @@ from .nested import *
 from .cache import *
 from .graphs import *
 from .settings import symbols
+from .diagnose import *
+from .distributed import *
 
 def apply_mods(modstr,config):
     if modstr is not None:
