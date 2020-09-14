@@ -183,7 +183,9 @@ class Task():
     def _serial_run(self,run_async=False):
         if run_async:
             import ray
-            def run_process_async(self): 
+            import os
+            def run_process_async(self):
+                os.nice(self.parameters['niceness']) 
                 return self.process()
             outs = ray.remote(run_process_async).remote(self)
         else:
