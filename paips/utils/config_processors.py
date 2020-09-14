@@ -1,12 +1,6 @@
 from IPython import embed
 from paips.utils import get_config
 
-symbols = {'global': '$',
-           'no-cachable': '!',
-           'embed': '$$'}
-
-
-
 def recursive_replace(tree,symbol_to_replace,replace_func):
     if isinstance(tree,dict):
         for k,v in tree.items():
