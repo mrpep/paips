@@ -234,6 +234,7 @@ class Task():
 
         #Restore original parameters
         self.parameters = copy.deepcopy(self.initial_parameters)
+        self.name = copy.deepcopy(self.original_name)
 
         return outs
 
