@@ -169,6 +169,7 @@ class Task():
             os.nice(niceness)
 
         def worker_wrapper(x):
+            os.nice(self.parameters['niceness'])
             for k, v in zip(self.parameters['parallel'],x):
                 self.parameters[k] = v
             out = self.process()
@@ -185,7 +186,8 @@ class Task():
             import ray
             import os
             def run_process_async(self):
-                os.nice(self.parameters['niceness']) 
+                os.nice(self.parameters['niceness'])
+                print('{}: Setting niceness {}'.format(self.name, self.parameters['niceness']))
                 return self.process()
             outs = ray.remote(run_process_async).remote(self)
         else:
