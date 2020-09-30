@@ -63,7 +63,7 @@ def main():
     if cluster_config:
         if cluster_config['manager'] == 'ray':
             import ray
-            ray.init()
+            ray.init(log_to_driver=False)
 
     def task_parameters_level_from_path(path):
         l = path.split('/')

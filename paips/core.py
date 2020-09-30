@@ -239,12 +239,13 @@ class Task():
         return outs
 
     def run(self, iteration=None):
-        self.make_hash_dict()
+        #self.make_hash_dict()
         self.task_hash = self.get_hash()
         self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
         self.export_dir = Path(self.global_parameters['output_path'],self.name)
         self.return_as_function = self.parameters.get('return_as_function',False)
         self.return_as_class = self.parameters.get('return_as_class',False)
+        self.logger.info('{}: Hash {}'.format(self.name,self.task_hash))
         
         cache_paths = self.find_cache()
         if self.cache and cache_paths:
