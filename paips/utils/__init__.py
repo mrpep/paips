@@ -6,6 +6,7 @@ from IPython import embed
 import importlib
 import sys
 import inspect
+from io import StringIO
 
 from .modiuls import *
 from .nested import *
@@ -16,12 +17,16 @@ from .diagnose import *
 from .distributed import *
 
 def apply_mods(modstr,config):
+    yaml = YAML()
     if modstr is not None:
         mods = modstr.split('&')
         for mod in mods:
             if '=' in mod:
                 mod_parts = mod.split('=')
-                config[mod_parts[0]] = mod_parts[1]
+                if mod_parts[1].startswith('['):
+                    config[mod_parts[0]] = yaml.load(mod_parts[1])
+                else:
+                    config[mod_parts[0]] = mod_parts[1]
 
 def get_delete_param(dictionary,param,default_value=None):
     if param in dictionary:
