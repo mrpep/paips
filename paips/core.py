@@ -10,15 +10,17 @@ from kahnfigh.core import find_path
 from ruamel.yaml import YAML
 import os
 import ray
+from shutil import copyfile
 
 class TaskIO():
-    def __init__(self, data, hash_val, iotype = 'data', name = None, parent = None):
+    def __init__(self, data, hash_val, iotype = 'data', name = None,position='0'):
         self.hash = hash_val
         self.data = data
         self.iotype = iotype
         self.name = name
-        self.parent = parent
         self.link_path = None
+        if position:
+            self.hash = self.hash + position
 
     def get_hash(self):
         return self.hash
@@ -29,23 +31,41 @@ class TaskIO():
         elif self.iotype == 'path':
             return joblib.load(self.data)
 
-    def save(self, cache_path=None, export_path=None, compression_level = 0):
+    def save(self, cache_path=None, export_path=None, compression_level = 0, export=False):
         self.address = Path(cache_path,self.hash)
         if not self.address.exists():
             self.address.mkdir(parents=True)
             
         #Save cache:
-        joblib.dump(self.data,Path(self.address,self.name),compress=compression_level)
-        self.create_link(self.address,export_path)
+        try:
+            joblib.dump(self.data,Path(self.address,self.name),compress=compression_level)
+        except:
+            embed()
 
-        return TaskIO(Path(self.address,self.name),self.hash,iotype='path',name=self.name)
+        if export:
+            destination_path = Path(export_path,self.name)
+            if not destination_path.parent.exists():
+                destination_path.parent.mkdir(parents=True,exist_ok=True)
+            copyfile(str(Path(self.address,self.name).absolute()),str(destination_path.absolute()))
+        else:
+            self.create_link(self.address,export_path)
+
+        return TaskIO(Path(self.address,self.name),self.hash,iotype='path',name=self.name,position=None)
 
     def create_link(self, cache_path, export_path):
         #Create symbolic link to cache:
-        self.link_path = Path(export_path,self.parent)
+        self.link_path = Path(export_path)
+        if not self.link_path.parent.exists():
+            self.link_path.parent.mkdir(parents=True,exist_ok=True)
         if not self.link_path.exists():
             os.symlink(str(cache_path.absolute()),str(self.link_path.absolute()))
 
+    def __getstate__(self):
+        return self.__dict__
+    
+
+    def __setstate__(self,d):
+        self.__dict__ = d
 
 class Task():
     def __init__(self, parameters, global_parameters=None, name=None, logger=None):
@@ -77,6 +97,9 @@ class Task():
         self.make_hash_dict()
         self.initial_parameters = copy.deepcopy(self.parameters)
 
+        self.export_path = Path(self.global_parameters.get('output_path'),self.name)
+        self.export = self.parameters.get('export',False)
+
         fname = Path(self.global_parameters['output_path'],'configs','{}.yaml'.format(self.name))
         self.parameters.save(fname)
 
@@ -91,6 +114,11 @@ class Task():
         _ = self.hash_dict.find_path(symbols['nocache'],mode='startswith',action='remove_value')
         _ = self.parameters.find_path(symbols['nocache'],mode='startswith',action='remove_substring')
 
+        for k,v in self.hash_dict.to_shallow().items():
+            if isinstance(v,TaskIO):
+                self.hash_dict[k] = self.hash_dict[k].get_hash()
+
+
     def search_dependencies(self):
         stop_propagate_dot = self.parameters.get('stop_propagate_dot',None)
         dependency_paths = self.parameters.find_path(symbols['dot'],mode='contains')
@@ -103,7 +131,6 @@ class Task():
         #search_dependencies(self.parameters,self.dependencies)
         self.dependencies = [self.parameters[path].split(symbols['dot'])[0] for path in dependency_paths]
         self.dependencies = [d for d in self.dependencies if d != 'self']
-
 
         return self.dependencies
 
@@ -149,17 +176,17 @@ class Task():
         if not isinstance(outs,tuple):
             outs = (outs,)
 
-        out_dict = {'{}{}{}'.format(self.name,symbols['dot'],out_name): TaskIO(out_val,self.get_hash(),iotype='data',name=out_name,parent=self.name) for out_name, out_val in zip(self.output_names,outs)}
-
+        out_dict = {'{}{}{}'.format(self.name,symbols['dot'],out_name): TaskIO(out_val,self.get_hash(),iotype='data',name=out_name,position=str(i)) for i, (out_name, out_val) in enumerate(zip(self.output_names,outs))}
+        
         if not self.in_memory:
             self.logger.info('{}: Saving outputs'.format(self.name))
             for k,v in out_dict.items():
                 if v.iotype == 'data':
                     out_dict[k] = v.save(
                         cache_path=self.global_parameters['cache_path'],
-                        export_path=self.global_parameters['output_path'],
-                        compression_level=self.global_parameters['cache_compression'])
-
+                        export_path=self.export_path,
+                        compression_level=self.global_parameters['cache_compression'],
+                        export=self.export)
         return out_dict
 
     def _parallel_run_ray(self,run_async = False):
@@ -187,7 +214,7 @@ class Task():
             import os
             def run_process_async(self):
                 os.nice(self.parameters['niceness'])
-                print('{}: Setting niceness {}'.format(self.name, self.parameters['niceness']))
+                self.logger.info('{}: Setting niceness {}'.format(self.name, self.parameters['niceness']))
                 return self.process()
             outs = ray.remote(run_process_async).remote(self)
         else:
@@ -197,6 +224,7 @@ class Task():
     def _serial_map(self,iteration=None,run_async=False):
         self.initial_parameters = copy.deepcopy(self.parameters)
         self.original_name = copy.deepcopy(self.name)
+        self.original_export_path = copy.deepcopy(self.export_path)
 
         map_var_names = self.parameters['map_vars']
         map_vars = zip(*[self.parameters[k].load() for k in map_var_names])
@@ -213,30 +241,47 @@ class Task():
         for i, iteration in enumerate(map_vars):
             self.parameters = copy.deepcopy(self.initial_parameters)
             self.parameters['iter'] = i + initial_iter
-            self.name = self.original_name + '_{}'.format(i + initial_iter)
+            #self.name = self.original_name + '_{}'.format(i + initial_iter)
             self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
-            self.export_dir = Path(self.global_parameters['output_path'],self.name)
+            self.export_path = Path(self.original_export_path,str(i))
 
             self.make_hash_dict()
             self.task_hash = self.get_hash()
 
             for k, var in zip(map_var_names,iteration):
-                self.parameters[k] = TaskIO(var,self.task_hash,iotype='data',name=k,parent=self.name)
+                self.parameters[k] = TaskIO(var,self.task_hash,iotype='data',name=k)
 
             cache_paths = self.find_cache()
             if self.cache and cache_paths:
                 self.logger.info('Caching task {}'.format(self.name))
-                out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,parent=self.name) for cache_i in cache_paths}
+                out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=str(self.output_names.index(Path(cache_i).stem))) for cache_i in cache_paths}
+                #what is this
                 for task_name, task in out_dict.items():
                     task.create_link(Path(task.data).parent,self.global_parameters['output_path'])
             else:
                 outs.append(self._serial_run(run_async=run_async))
+            print('serial map')
 
         #Restore original parameters
         self.parameters = copy.deepcopy(self.initial_parameters)
         self.name = copy.deepcopy(self.original_name)
+        self.export_path = Path(self.original_export_path,'merged')
 
-        return outs
+        self.make_hash_dict()
+        self.task_hash = self.get_hash()
+
+        #To Do: Merge outputs of map
+        merge_map = {}
+        for iter in outs:
+            for k,v in iter.items():
+                if k not in merge_map:
+                    merge_map[k] = [v]
+                else:
+                    merge_map[k].extend([v])
+
+        outs = tuple([[r.load() for r in merge_map['{}->{}'.format(self.name,name)]] for name in self.output_names])
+        
+        return self._process_outputs(outs)
 
     def run(self, iteration=None):
         #self.make_hash_dict()
@@ -250,7 +295,7 @@ class Task():
         cache_paths = self.find_cache()
         if self.cache and cache_paths:
             self.logger.info('{}: Caching'.format(self.name))
-            out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,parent=self.name) for cache_i in cache_paths}
+            out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=str(self.output_names.index(Path(cache_i).stem))) for cache_i in cache_paths}
             for task_name, task in out_dict.items():
                 task.create_link(Path(task.data).parent,self.global_parameters['output_path'])
         else:
@@ -279,6 +324,13 @@ class Task():
                 raise Exception('Mixing !parallel-map and !map in a task is not allowed')
 
         return out_dict
+
+    
+    def __getstate__(self):
+        embed()
+    
+    def __setstate__(self,d):
+        embed()
 
 class TaskGraph(Task):
     def __init__(self,parameters,global_parameters=None, name=None, logger=None):
@@ -399,11 +451,6 @@ class TaskGraph(Task):
         Runs each task in order, gather outputs and inputs.
         """
 
-        """
-        ToDo:
-        - Loop execution mode
-        """
-
         remaining_tasks = [task.name for task in self.dependency_order]
         
         self.tasks_io = {}
@@ -413,10 +460,13 @@ class TaskGraph(Task):
             for k,v in inputs.items():
                 self.tasks_io['self->{}'.format(k)] = v
             #self.send_dependency_data(self.tasks_io,ignore_map=True)
-            
         for task in self.dependency_order:
+            
+            task.reset_task_state()
+            
             if 'iter' in self.parameters:
                 task.parameters['iter'] = self.parameters['iter']
+            task.export_path = Path(self.export_path,task.export_path.parts[-1])
 
             task.send_dependency_data(self.tasks_io)
             out_dict = task.run()
@@ -427,15 +477,17 @@ class TaskGraph(Task):
 
         filter_outputs = self.parameters.get('outputs',None)
         task_out = []
+        
         if filter_outputs:
             self.output_names = []
             for k,v in filter_outputs.items():
                 self.output_names.append(k)
                 task_out.append(self.tasks_io[v].load())
+            print('filter outputs')
+            return tuple(task_out)
         else:
-            task_out = [self.tasks_io]
-
-        return task_out
+            #task_out = [self.tasks_io]
+            return {}
 
     def __getstate__(self):
         if 'task_modules' in self.__dict__:
