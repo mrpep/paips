@@ -11,6 +11,7 @@ from ruamel.yaml import YAML
 import os
 import ray
 from shutil import copyfile
+import glob
 
 class TaskIO():
     def __init__(self, data, hash_val, iotype = 'data', name = None,position='0'):
@@ -20,7 +21,7 @@ class TaskIO():
         self.name = name
         self.link_path = None
         if position:
-            self.hash = self.hash + position
+            self.hash = self.hash + '_{}'.format(position)
 
     def get_hash(self):
         return self.hash
@@ -42,28 +43,41 @@ class TaskIO():
         except:
             embed()
 
-        if export:
-            destination_path = Path(export_path,self.name)
-            if not destination_path.parent.exists():
-                destination_path.parent.mkdir(parents=True,exist_ok=True)
-            copyfile(str(Path(self.address,self.name).absolute()),str(destination_path.absolute()))
-        else:
-            self.create_link(self.address,export_path)
+        #cache_fnames = glob.glob(str(cache_path)+'/*')
+        #if export:
+        #    destination_path = Path(export_path,self.name)
+        #    if not destination_path.parent.exists():
+        #        destination_path.parent.mkdir(parents=True,exist_ok=True)
+        #    copyfile(str(Path(self.address,self.name).absolute()),str(destination_path.absolute()))
+        #else:
+        self.create_link(self.address,export_path,copy_files=export)
 
         return TaskIO(Path(self.address,self.name),self.hash,iotype='path',name=self.name,position=None)
 
-    def create_link(self, cache_path, export_path):
+    def create_link(self, cache_path, export_path,copy_files=False):
+        #embed()
         #Create symbolic link to cache:
-        self.link_path = Path(export_path)
-        if not self.link_path.parent.exists():
-            self.link_path.parent.mkdir(parents=True,exist_ok=True)
-        if not self.link_path.exists():
-            os.symlink(str(cache_path.absolute()),str(self.link_path.absolute()))
+        source_file = glob.glob(str(cache_path)+'/*')
+        for f in source_file:
+            destination_path = Path(export_path,Path(f).stem)
+            if not destination_path.parent.exists():
+                destination_path.parent.mkdir(parents=True,exist_ok=True)
+            if copy_files:
+                if not destination_path.is_symlink() and not destination_path.exists():
+                    copyfile(f,str(destination_path.absolute()))
+            else:
+                if not destination_path.is_symlink() and not destination_path.exists():
+                    os.symlink(f,str(destination_path.absolute()))
+
+        #self.link_path = Path(export_path)
+        #if not self.link_path.parent.exists():
+        #    self.link_path.parent.mkdir(parents=True,exist_ok=True)
+        #if not self.link_path.exists():
+        #    os.symlink(str(cache_path.absolute()),str(self.link_path.absolute()))
 
     def __getstate__(self):
         return self.__dict__
     
-
     def __setstate__(self,d):
         self.__dict__ = d
 
@@ -254,10 +268,15 @@ class Task():
             cache_paths = self.find_cache()
             if self.cache and cache_paths:
                 self.logger.info('Caching task {}'.format(self.name))
-                out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=str(self.output_names.index(Path(cache_i).stem))) for cache_i in cache_paths}
+                #out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=str(self.output_names.index(Path(cache_i).stem))) for cache_i in cache_paths}
                 #what is this
+                #for task_name, task in out_dict.items():
+                #    task.create_link(Path(task.data).parent,self.global_parameters['output_path'])
+                
+                out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=Path(cache_i).parts[-2].split('_')[-1]) for cache_i in cache_paths}
                 for task_name, task in out_dict.items():
-                    task.create_link(Path(task.data).parent,self.global_parameters['output_path'])
+                    task.create_link(Path(task.data).parent,Path(self.export_path))
+
             else:
                 outs.append(self._serial_run(run_async=run_async))
             print('serial map')
@@ -293,11 +312,13 @@ class Task():
         self.logger.info('{}: Hash {}'.format(self.name,self.task_hash))
         
         cache_paths = self.find_cache()
+
         if self.cache and cache_paths:
             self.logger.info('{}: Caching'.format(self.name))
-            out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=str(self.output_names.index(Path(cache_i).stem))) for cache_i in cache_paths}
+
+            out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=Path(cache_i).parts[-2].split('_')[-1]) for cache_i in cache_paths}
             for task_name, task in out_dict.items():
-                task.create_link(Path(task.data).parent,self.global_parameters['output_path'])
+                task.create_link(Path(task.data).parent,Path(self.export_path))
         else:
             run_async = self.parameters.get('async',False)
             if self.return_as_function:

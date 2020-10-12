@@ -11,7 +11,8 @@ def make_hash(hash_dict):
 
 def find_cache(hash_val,cache_path):
 	cache_dir = Path(cache_path,hash_val)
-	if cache_dir.exists():
-		return glob.glob(str(cache_dir.absolute())+'/*')
+	cache_dirs = glob.glob(str(cache_dir.absolute())+'_*/*')
+	if len(cache_dirs) > 0:
+		return cache_dirs
 	else:
 		return None

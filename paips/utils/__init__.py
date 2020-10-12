@@ -17,16 +17,22 @@ from .diagnose import *
 from .distributed import *
 
 def apply_mods(modstr,config):
+    
     yaml = YAML()
     if modstr is not None:
         mods = modstr.split('&')
         for mod in mods:
             if '=' in mod:
                 mod_parts = mod.split('=')
-                if mod_parts[1].startswith('['):
-                    config[mod_parts[0]] = yaml.load(mod_parts[1])
-                else:
+                #if mod_parts[1].startswith('['):
+                if '!' in mod_parts[1]:
                     config[mod_parts[0]] = mod_parts[1]
+                #elif mod_parts[1].lower() == 'null':
+                #    config[mod_parts[0]] = None
+                else:
+                    config[mod_parts[0]] = yaml.load(mod_parts[1])
+                
+                    
 
 def get_delete_param(dictionary,param,default_value=None):
     if param in dictionary:
