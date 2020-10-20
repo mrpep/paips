@@ -44,6 +44,7 @@ def main():
                      'cache_compression': 3}
 
     global_config.update(main_config.get('global',{}))
+    main_config['global'].update(global_config)
 
     paips_logger = logger.get_logger('Paips','logs')
 
@@ -51,6 +52,7 @@ def main():
     #main_config.replace_on_symbol(symbols['insert_config'],lambda x: Config(x).store)
     #main_config.replace_on_symbol(symbols['insert_variable'],lambda x: global_config[x])
     main_config.find_path(symbols['insert_config'],mode='startswith',action=lambda x: Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags))
+    global_config = main_config['global']
     main_config.find_path(symbols['insert_variable'],mode='startswith',action=lambda x: global_config[x.split(symbols['insert_variable'])[-1]])
 
     default_cluster_config = {
@@ -64,6 +66,7 @@ def main():
         if cluster_config['manager'] == 'ray':
             import ray
             ray.init(log_to_driver=False)
+            #ray.init()
 
     def task_parameters_level_from_path(path):
         l = path.split('/')
@@ -125,7 +128,10 @@ def main():
     main_config.update(parallel_paths_)
     main_config.update(map_paths_)
 
+    #embed()
+
     main_task = TaskGraph(main_config,global_config,name='MainTask',logger=paips_logger)
+
     main_task.run()
     ray.shutdown()
 
