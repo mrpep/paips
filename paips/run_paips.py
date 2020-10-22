@@ -14,7 +14,6 @@ from io import StringIO
 
 def main():
     argparser = argparse.ArgumentParser(description='Run pipeline from configs')
-    #argparser.add_argument('config_path', help='Path to YAML config file for running experiment', nargs='+')
     argparser.add_argument('config_path', help='Path to YAML config file for running experiment', nargs='+')
     argparser.add_argument('--output_path', type=str, help='Output directory for symbolic links of cache', default='experiments/{}'.format(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     argparser.add_argument('--no-caching', dest='no_caching', help='Run all', action='store_true', default=False)
@@ -24,8 +23,7 @@ def main():
     #Get main config
     #By default, yaml uses custom tags marked as !, however, we want to use it in a more general way even in dictionaries.
     #To avoid raising exceptions, an ignorable tag is created which will return the string unchanged for later processing
-    
-    #ignorable_tags = ['!nocache','!loop','!yaml','!var','!parallel-map','!map']
+
     ignorable_tags = [v.strip() for k,v in symbols.items() if v.startswith('!')]
     special_tags = [IgnorableTag(tag) for tag in ignorable_tags]
 
@@ -33,8 +31,6 @@ def main():
     main_config = merge_configs(configs)
 
     apply_mods(args['mods'], main_config)
-
-    #main_config = Config(args['config_path'], special_tags=[IgnorableTag(tag) for tag in ignorable_tags])
 
     #Get global variables and set to default values the missing ones
     global_config = {'cache': not args['no_caching'],
@@ -49,8 +45,7 @@ def main():
     paips_logger = logger.get_logger('Paips','logs')
 
     #Embed external configs and global variables
-    #main_config.replace_on_symbol(symbols['insert_config'],lambda x: Config(x).store)
-    #main_config.replace_on_symbol(symbols['insert_variable'],lambda x: global_config[x])
+
     main_config.find_path(symbols['insert_config'],mode='startswith',action=lambda x: Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags))
     global_config = main_config['global']
     main_config.find_path(symbols['insert_variable'],mode='startswith',action=lambda x: global_config[x.split(symbols['insert_variable'])[-1]])

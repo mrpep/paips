@@ -40,7 +40,8 @@ class TaskIO():
         #Save cache:
         try:
             joblib.dump(self.data,Path(self.address,self.name),compress=compression_level)
-        except:
+        except Exception as e:
+            print(e)
             embed()
 
         #cache_fnames = glob.glob(str(cache_path)+'/*')
@@ -115,7 +116,7 @@ class Task():
         self.export = self.parameters.get('export',False)
 
         fname = Path(self.global_parameters['output_path'],'configs','{}.yaml'.format(self.name))
-        self.parameters.save(fname)
+        self.parameters.save(fname, mode='unsafe')
 
     def make_hash_dict(self):
         self.hash_dict = copy.deepcopy(self.parameters)
@@ -347,11 +348,13 @@ class Task():
         return out_dict
 
     
-    def __getstate__(self):
-        embed()
+    #def __getstate__(self):
+    #    print('here')
+    #    embed()
     
-    def __setstate__(self,d):
-        embed()
+    #def __setstate__(self,d):
+    #    print('here2')
+    #    embed()
 
 class TaskGraph(Task):
     def __init__(self,parameters,global_parameters=None, name=None, logger=None):
