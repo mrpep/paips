@@ -493,6 +493,8 @@ class TaskGraph(Task):
             task.export_path = Path(self.export_path,task.export_path.parts[-1])
 
             task.send_dependency_data(self.tasks_io)
+            if task.parameters['class'] == 'WANDBExperiment':
+                task.config = self.parameters.to_shallow()
             out_dict = task.run()
 
             self.tasks_io.update(out_dict)
