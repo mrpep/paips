@@ -1,4 +1,3 @@
-from IPython import embed
 import importlib
 import argparse
 import datetime
@@ -122,8 +121,6 @@ def main():
 
     main_config.update(parallel_paths_)
     main_config.update(map_paths_)
-
-    #embed()
 
     main_task = TaskGraph(main_config,global_config,name='MainTask',logger=paips_logger)
 

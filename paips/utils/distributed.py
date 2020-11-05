@@ -1,5 +1,4 @@
 import ray
-from IPython import embed
 
 def method_wrapper(instance,name,args=[],kwargs={}):
      return getattr(instance,name)(*args,**kwargs)
@@ -28,7 +27,6 @@ class ActorWrapper:
             wrapper_fn = self.return_callable(method)
         else:
             print(name)
-            embed()
             wrapper_fn = ray.get(self.actor.get.remote(name))
 
         return wrapper_fn

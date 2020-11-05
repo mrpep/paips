@@ -1,5 +1,4 @@
 from .settings import symbols
-from IPython import embed
 
 def search_dependencies(elem,dependencies):
 	if isinstance(elem,dict):

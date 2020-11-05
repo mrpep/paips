@@ -2,7 +2,6 @@ import os
 import pickle
 from pathlib import Path
 from ruamel.yaml import YAML
-from IPython import embed
 import importlib
 import sys
 import inspect

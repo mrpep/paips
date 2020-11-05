@@ -1,4 +1,3 @@
-from IPython import embed
 from paips.utils import get_config
 
 def recursive_replace(tree,symbol_to_replace,replace_func):

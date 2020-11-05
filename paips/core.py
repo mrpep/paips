@@ -1,5 +1,4 @@
 from .utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module, make_graph_from_tasks, symbols, method_wrapper
-from IPython import embed
 import copy
 import numpy as np
 import joblib
@@ -42,7 +41,6 @@ class TaskIO():
             joblib.dump(self.data,Path(self.address,self.name),compress=compression_level)
         except Exception as e:
             print(e)
-            embed()
 
         #cache_fnames = glob.glob(str(cache_path)+'/*')
         #if export:
@@ -56,7 +54,6 @@ class TaskIO():
         return TaskIO(Path(self.address,self.name),self.hash,iotype='path',name=self.name,position=None)
 
     def create_link(self, cache_path, export_path,copy_files=False):
-        #embed()
         #Create symbolic link to cache:
         source_file = glob.glob(str(cache_path)+'/*')
         for f in source_file:
@@ -346,15 +343,6 @@ class Task():
                 raise Exception('Mixing !parallel-map and !map in a task is not allowed')
 
         return out_dict
-
-    
-    #def __getstate__(self):
-    #    print('here')
-    #    embed()
-    
-    #def __setstate__(self,d):
-    #    print('here2')
-    #    embed()
 
 class TaskGraph(Task):
     def __init__(self,parameters,global_parameters=None, name=None, logger=None):
