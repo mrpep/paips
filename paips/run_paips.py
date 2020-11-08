@@ -39,7 +39,11 @@ def main():
                      'cache_compression': 3}
 
     global_config.update(main_config.get('global',{}))
-    main_config['global'].update(global_config)
+
+    if 'global' in main_config:
+        main_config['global'].update(global_config)
+    else:
+        main_config['global'] = global_config
 
     paips_logger = logger.get_logger('Paips','logs')
 
