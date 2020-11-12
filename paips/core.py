@@ -11,6 +11,9 @@ import os
 import ray
 from shutil import copyfile
 import glob
+from swissknife.aws import S3File
+
+from IPython import embed
 
 class TaskIO():
     def __init__(self, data, hash_val, iotype = 'data', name = None,position='0'):
@@ -29,29 +32,38 @@ class TaskIO():
         if self.iotype == 'data':
             return self.data
         elif self.iotype == 'path':
-            return joblib.load(self.data)
+            self.data = str(self.data)
+            if self.data.startswith('s3://'):
+                s3_file = S3File(self.data)
+                if not Path(s3_file.get_key()).exists():
+                    s3_file.download(Path(s3_file.get_key()))
+                return joblib.load(Path(s3_file.get_key()))
+            else:
+                return joblib.load(self.data)
 
     def save(self, cache_path=None, export_path=None, compression_level = 0, export=False):
-        self.address = Path(cache_path,self.hash)
-        if not self.address.exists():
-            self.address.mkdir(parents=True)
+        if cache_path.startswith('s3://'):
+            s3_path =S3File(cache_path,self.hash,self.name)
+            self.address = Path(s3_path.get_key())
+        else:
+            self.address = Path(cache_path,self.hash,self.name)
+
+        if not self.address.parent.exists():
+            self.address.parent.mkdir(parents=True)
             
-        #Save cache:
+        #Save cache locally:
         try:
-            joblib.dump(self.data,Path(self.address,self.name),compress=compression_level)
+            joblib.dump(self.data,self.address,compress=compression_level)
         except Exception as e:
             print(e)
 
-        #cache_fnames = glob.glob(str(cache_path)+'/*')
-        #if export:
-        #    destination_path = Path(export_path,self.name)
-        #    if not destination_path.parent.exists():
-        #        destination_path.parent.mkdir(parents=True,exist_ok=True)
-        #    copyfile(str(Path(self.address,self.name).absolute()),str(destination_path.absolute()))
-        #else:
-        self.create_link(self.address,export_path,copy_files=export)
+        self.create_link(self.address.parent,export_path,copy_files=export)
 
-        return TaskIO(Path(self.address,self.name),self.hash,iotype='path',name=self.name,position=None)
+        #If S3, also upload it
+        if cache_path.startswith('s3://'):
+            s3_path.upload(self.address)
+
+        return TaskIO(self.address,self.hash,iotype='path',name=self.name,position=None)
 
     def create_link(self, cache_path, export_path,copy_files=False):
         #Create symbolic link to cache:
