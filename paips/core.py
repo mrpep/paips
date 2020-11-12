@@ -36,6 +36,7 @@ class TaskIO():
             if self.data.startswith('s3://'):
                 s3_file = S3File(self.data)
                 if not Path(s3_file.get_key()).exists():
+                    print('Bringing data from S3')
                     s3_file.download(Path(s3_file.get_key()))
                 return joblib.load(Path(s3_file.get_key()))
             else:
@@ -61,6 +62,7 @@ class TaskIO():
 
         #If S3, also upload it
         if cache_path.startswith('s3://'):
+            print('Uploading cache to S3')
             s3_path.upload(self.address)
 
         return TaskIO(self.address,self.hash,iotype='path',name=self.name,position=None)
