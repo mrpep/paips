@@ -18,11 +18,15 @@ class GenericFile():
 
     def load(self):
         if self.filesystem == 's3':
-            if not Path(self.file_obj.get_key()).exists():
+            if not Path(self.local_filename).exists():
                 self.file_obj.download(Path(self.file_obj.get_key()))
             return joblib.load(Path(self.file_obj.get_key()))
         elif self.filesystem == 'local':
             return joblib.load(self.file_obj)
+
+    def download(self):
+        if self.filesystem == 's3':
+            self.file_obj.download(Path(self.file_obj.get_key()))
 
     def __str__(self):
         return str(self.file_obj)

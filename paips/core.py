@@ -248,10 +248,7 @@ class Task():
         return self._process_outputs(outs)
 
     def _serial_map(self,iteration=None,run_async=False):
-        try:
-            self.initial_parameters = copy.deepcopy(self.parameters)
-        except:
-            embed()
+        self.initial_parameters = copy.deepcopy(self.parameters)
         self.original_name = copy.deepcopy(self.name)
         self.original_export_path = copy.deepcopy(self.export_path)
 
