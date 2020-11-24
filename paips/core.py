@@ -50,7 +50,7 @@ class TaskIO():
 
         #If S3, also upload it
         if self.address.filesystem == 's3':
-            self.address.upload(self.address.local_filename)
+            self.address.upload_from(self.address.local_filename)
 
         return TaskIO(self.address,self.hash,iotype='path',name=self.name,position=None)
 
@@ -81,10 +81,10 @@ class TaskIO():
                     os.symlink(f,str(destination_path.absolute()))
                     if symlink_db is not None:
                         symlink_file = GenericFile(symlink_db)
-                        with open(symlink_db,'a+') as fw:
+                        with open(symlink_file.local_filename,'a+') as fw:
                             fw.write('{} -> {}\n'.format(str(destination_path),f))
                         if symlink_file.filesystem == 's3':
-                            symlink_file.upload_from(str(symlink_file))
+                            symlink_file.upload_from(symlink_file.local_filename)
 
     def __getstate__(self):
         return self.__dict__
@@ -248,7 +248,10 @@ class Task():
         return self._process_outputs(outs)
 
     def _serial_map(self,iteration=None,run_async=False):
-        self.initial_parameters = copy.deepcopy(self.parameters)
+        try:
+            self.initial_parameters = copy.deepcopy(self.parameters)
+        except:
+            embed()
         self.original_name = copy.deepcopy(self.name)
         self.original_export_path = copy.deepcopy(self.export_path)
 
