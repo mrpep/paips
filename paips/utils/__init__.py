@@ -14,6 +14,7 @@ from .graphs import *
 from .settings import symbols
 from .diagnose import *
 from .distributed import *
+from .file import *
 
 def apply_mods(modstr,config):
     

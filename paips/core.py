@@ -1,4 +1,6 @@
-from .utils import get_delete_param, make_hash, search_dependencies, search_replace, find_cache, get_modules, get_classes_in_module, make_graph_from_tasks, symbols, method_wrapper
+from .utils import (get_delete_param, make_hash, search_dependencies, 
+search_replace, find_cache, get_modules, get_classes_in_module, 
+make_graph_from_tasks, symbols, method_wrapper, GenericFile)
 import copy
 import numpy as np
 import joblib
@@ -11,7 +13,6 @@ import os
 import ray
 from shutil import copyfile
 import glob
-from swissknife.aws import S3File
 
 from IPython import embed
 
@@ -32,60 +33,58 @@ class TaskIO():
         if self.iotype == 'data':
             return self.data
         elif self.iotype == 'path':
-            self.data = str(self.data)
-            if self.data.startswith('s3://'):
-                s3_file = S3File(self.data)
-                if not Path(s3_file.get_key()).exists():
-                    print('Bringing data from S3')
-                    s3_file.download(Path(s3_file.get_key()))
-                return joblib.load(Path(s3_file.get_key()))
-            else:
-                return joblib.load(self.data)
+            return GenericFile(self.data).load()
 
-    def save(self, cache_path=None, export_path=None, compression_level = 0, export=False):
-        if cache_path.startswith('s3://'):
-            s3_path =S3File(cache_path,self.hash,self.name)
-            self.address = Path(s3_path.get_key())
-        else:
-            self.address = Path(cache_path,self.hash,self.name)
-
+    def save(self, cache_path=None, export_path=None, compression_level = 0, export=False,symlink_db=None):
+        self.address = GenericFile(cache_path,self.hash,self.name)
         if not self.address.parent.exists():
             self.address.parent.mkdir(parents=True)
             
         #Save cache locally:
         try:
-            joblib.dump(self.data,self.address,compress=compression_level)
+            joblib.dump(self.data,self.address.local_filename,compress=compression_level)
         except Exception as e:
             print(e)
 
-        self.create_link(self.address.parent,export_path,copy_files=export)
+        self.create_link(self.address.parent,export_path,copy_files=export,symlink_db=symlink_db)
 
         #If S3, also upload it
-        if cache_path.startswith('s3://'):
-            print('Uploading cache to S3')
-            s3_path.upload(self.address)
+        if self.address.filesystem == 's3':
+            self.address.upload(self.address.local_filename)
 
         return TaskIO(self.address,self.hash,iotype='path',name=self.name,position=None)
 
-    def create_link(self, cache_path, export_path,copy_files=False):
+    def create_link(self, cache_path, export_path,copy_files=False,symlink_db=None):
         #Create symbolic link to cache:
         source_file = glob.glob(str(cache_path)+'/*')
         for f in source_file:
-            destination_path = Path(export_path,Path(f).stem)
+            destination_path = GenericFile(export_path,Path(f).stem)
             if not destination_path.parent.exists():
                 destination_path.parent.mkdir(parents=True,exist_ok=True)
             if copy_files:
+                # If we want easy access to files, then the real file will be at export path and the symlink in cache
                 if not destination_path.is_symlink() and not destination_path.exists():
                     copyfile(f,str(destination_path.absolute()))
+                    if destination_path.filesystem == 's3':
+                        destination_path.upload_from(str(destination_path.absolute()))
+                    os.remove(f)
+                    os.symlink(str(destination_path.absolute()),f)
+                    if symlink_db is not None:
+                        symlink_file = GenericFile(symlink_db)
+                        with open(str(symlink_file),'a+') as fw:
+                            fw.write('{} -> {}\n'.format(f,str(destination_path)))
+                        if symlink_file.filesystem == 's3':
+                            symlink_file.upload_from(str(symlink_file))
+                        
             else:
                 if not destination_path.is_symlink() and not destination_path.exists():
                     os.symlink(f,str(destination_path.absolute()))
-
-        #self.link_path = Path(export_path)
-        #if not self.link_path.parent.exists():
-        #    self.link_path.parent.mkdir(parents=True,exist_ok=True)
-        #if not self.link_path.exists():
-        #    os.symlink(str(cache_path.absolute()),str(self.link_path.absolute()))
+                    if symlink_db is not None:
+                        symlink_file = GenericFile(symlink_db)
+                        with open(symlink_db,'a+') as fw:
+                            fw.write('{} -> {}\n'.format(str(destination_path),f))
+                        if symlink_file.filesystem == 's3':
+                            symlink_file.upload_from(str(symlink_file))
 
     def __getstate__(self):
         return self.__dict__
@@ -104,8 +103,8 @@ class Task():
         if global_parameters:
             self.global_parameters.update(global_parameters)
 
-        if not Path(self.global_parameters['output_path']).exists():
-            Path(self.global_parameters['output_path']).mkdir(parents=True)
+        if not GenericFile(self.global_parameters['output_path']).exists():
+            GenericFile(self.global_parameters['output_path']).mkdir(parents=True)
 
         self.name = name
         self.valid_args=[]
@@ -125,9 +124,12 @@ class Task():
 
         self.export_path = Path(self.global_parameters.get('output_path'),self.name)
         self.export = self.parameters.get('export',False)
+        self.symlinkdb_path = Path(self.global_parameters.get('output_path'),'links.txt')
 
-        fname = Path(self.global_parameters['output_path'],'configs','{}.yaml'.format(self.name))
-        self.parameters.save(fname, mode='unsafe')
+        fname = GenericFile(self.global_parameters['output_path'],'configs','{}.yaml'.format(self.name))
+        self.parameters.save(Path(fname.local_filename), mode='unsafe')
+        if fname.filesystem == 's3':
+            fname.upload_from(fname.local_filename)
 
     def make_hash_dict(self):
         self.hash_dict = copy.deepcopy(self.parameters)
@@ -178,9 +180,6 @@ class Task():
             if len(paths) > 0:
                 self.parameters.find_path(k,action=lambda x: v.load())
 
-        #search_replace(self.hash_dict,data,action='get_hash')
-        #search_replace(self.parameters,data,action='load')
-
     def get_hash(self):
         return make_hash(self.hash_dict)
 
@@ -212,7 +211,8 @@ class Task():
                         cache_path=self.global_parameters['cache_path'],
                         export_path=self.export_path,
                         compression_level=self.global_parameters['cache_compression'],
-                        export=self.export)
+                        export=self.export,
+                        symlink_db=self.symlinkdb_path)
         return out_dict
 
     def _parallel_run_ray(self,run_async = False):
@@ -267,7 +267,6 @@ class Task():
         for i, iteration in enumerate(map_vars):
             self.parameters = copy.deepcopy(self.initial_parameters)
             self.parameters['iter'] = i + initial_iter
-            #self.name = self.original_name + '_{}'.format(i + initial_iter)
             self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
             self.export_path = Path(self.original_export_path,str(i))
 
@@ -280,11 +279,6 @@ class Task():
             cache_paths = self.find_cache()
             if self.cache and cache_paths:
                 self.logger.info('Caching task {}'.format(self.name))
-                #out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=str(self.output_names.index(Path(cache_i).stem))) for cache_i in cache_paths}
-                #what is this
-                #for task_name, task in out_dict.items():
-                #    task.create_link(Path(task.data).parent,self.global_parameters['output_path'])
-                
                 out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=Path(cache_i).parts[-2].split('_')[-1]) for cache_i in cache_paths}
                 for task_name, task in out_dict.items():
                     task.create_link(Path(task.data).parent,Path(self.export_path))

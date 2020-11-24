@@ -112,14 +112,12 @@ def main():
     for k,v in parallel_paths_.items():
         v_yaml_stream = StringIO()
         yaml.dump(v,v_yaml_stream)
-        #parallel_paths_[k] = symbols['nocache'] + ' ' + v_yaml_stream.getvalue()
         parallel_paths_[k] = symbols['nocache'] + ' ' + str(v)
         v_yaml_stream.close()
 
     for k,v in map_paths_.items():
         v_yaml_stream = StringIO()
         yaml.dump(v,v_yaml_stream)
-        #map_paths_[k] = symbols['nocache'] + ' ' + v_yaml_stream.getvalue()
         map_paths_[k] = symbols['nocache'] + ' ' + str(v)
         v_yaml_stream.close()
 
