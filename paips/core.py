@@ -181,8 +181,8 @@ class Task():
                 self.parameters.find_path(k,action=lambda x: v.load())
 
     def get_hash(self):
-        return make_hash(self.hash_dict)
-
+        return self.hash_dict.hash()
+        
     def process(self):
         pass
 
