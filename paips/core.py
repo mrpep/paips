@@ -448,11 +448,17 @@ class TaskGraph(Task):
         priority_nodes = [node for node in self.graph.nodes if 'priorize' in node.parameters and node.parameters['priorize']]
         
         if len(priority_nodes)>0:
-            all_sorts = [top for top in nx.all_topological_sorts(self.graph)]
+            import itertools
+            all_sorts = [top for top in itertools.islice(nx.all_topological_sorts(self.graph),100)]
             sort_score = np.array([sum([top.index(pnode) for pnode in priority_nodes]) for top in all_sorts])
             best_sort = all_sorts[np.argmin(sort_score)]
 
             self.dependency_order = best_sort
+
+        for node in self.graph.nodes:
+            if node.parameters.get('run_first',False):
+                self.dependency_order.remove(node)
+                self.dependency_order.insert(0,node)
 
     def _clear_tasksio_not_needed(self, remaining_tasks):
         needed_tasks = [list(self.graph.predecessors(node)) for node in self.graph.nodes if node.name in remaining_tasks]
