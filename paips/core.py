@@ -1,6 +1,8 @@
 from .utils import (get_delete_param, make_hash, search_dependencies, 
 search_replace, find_cache, get_modules, get_classes_in_module, 
-make_graph_from_tasks, symbols, method_wrapper, GenericFile)
+make_graph_from_tasks, symbols, method_wrapper, GenericFile,
+apply_mods)
+
 import copy
 import numpy as np
 import joblib
@@ -118,6 +120,9 @@ class Task():
 
         self.dependencies = []
         self.logger = logger
+
+        if 'mods' in self.parameters:
+            apply_mods(self.parameters['mods'],Config(self.parameters))
 
         self.make_hash_dict()
         self.initial_parameters = copy.deepcopy(self.parameters)

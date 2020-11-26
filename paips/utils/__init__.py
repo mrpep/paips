@@ -24,13 +24,15 @@ def apply_mods(modstr,config):
         for mod in mods:
             if '=' in mod:
                 mod_parts = mod.split('=')
+                mod_k = '='.join(mod_parts[:-1])
+                mod_v = mod_parts[-1]
                 #if mod_parts[1].startswith('['):
-                if '!' in mod_parts[1]:
-                    config[mod_parts[0]] = mod_parts[1]
+                if '!' in mod_v:
+                    config[mod_k] = mod_v
                 #elif mod_parts[1].lower() == 'null':
                 #    config[mod_parts[0]] = None
                 else:
-                    config[mod_parts[0]] = yaml.load(mod_parts[1])
+                    config[mod_k] = yaml.load(mod_v)
                 
                     
 
