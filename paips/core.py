@@ -123,6 +123,7 @@ class Task():
 
         if 'mods' in self.parameters:
             apply_mods(self.parameters['mods'],Config(self.parameters))
+            self.parameters.pop('mods')
 
         self.make_hash_dict()
         self.initial_parameters = copy.deepcopy(self.parameters)
