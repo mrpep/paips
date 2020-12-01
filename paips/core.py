@@ -37,26 +37,31 @@ class TaskIO():
         elif self.iotype == 'path':
             return GenericFile(self.data).load()
 
-    def save(self, cache_path=None, export_path=None, compression_level = 0, export=False,symlink_db=None):
+    def save(self, cache_path=None, export_path=None, compression_level = 0, export=False,symlink_db=None,overwrite_export=True):
         self.address = GenericFile(cache_path,self.hash,self.name)
         if not self.address.parent.exists():
             self.address.parent.mkdir(parents=True)
             
         #Save cache locally:
         try:
+            if Path(self.address.local_filename).exists():
+                Path(self.address.local_filename).unlink()
             joblib.dump(self.data,self.address.local_filename,compress=compression_level)
         except Exception as e:
             print(e)
+            from IPython import embed
+            embed()
+            
 
-        self.create_link(self.address.parent,export_path,copy_files=export,symlink_db=symlink_db)
+        self.create_link(self.address.parent,export_path,copy_files=export,symlink_db=symlink_db,overwrite = overwrite_export)
 
         #If S3, also upload it
-        if self.address.filesystem == 's3':
+        if (self.address.filesystem == 's3') and not export:
             self.address.upload_from(self.address.local_filename)
 
         return TaskIO(self.address,self.hash,iotype='path',name=self.name,position=None)
 
-    def create_link(self, cache_path, export_path,copy_files=False,symlink_db=None):
+    def create_link(self, cache_path, export_path,copy_files=False,symlink_db=None,overwrite=True):
         #Create symbolic link to cache:
         source_file = glob.glob(str(cache_path)+'/*')
         for f in source_file:
@@ -65,24 +70,36 @@ class TaskIO():
                 destination_path.parent.mkdir(parents=True,exist_ok=True)
             if copy_files:
                 # If we want easy access to files, then the real file will be at export path and the symlink in cache
-                if not destination_path.is_symlink() and not destination_path.exists():
-                    copyfile(f,str(destination_path.absolute()))
+                if (not destination_path.is_symlink() and not destination_path.exists()) or overwrite:
+                    try:
+                        if Path(destination_path.local_filename).exists():
+                            destination_path.unlink()
+                        copyfile(f,str(destination_path.absolute()))
+                    except Exception as e:
+                        print(e)
+                        from IPython import embed
+                        embed()
                     if destination_path.filesystem == 's3':
                         destination_path.upload_from(str(destination_path.absolute()))
-                    os.remove(f)
-                    os.symlink(str(destination_path.absolute()),f)
+                    #os.remove(f)
+                    #os.symlink(str(destination_path.absolute()),f)
                     if symlink_db is not None:
                         symlink_file = GenericFile(symlink_db)
-                        with open(str(symlink_file),'a+') as fw:
+                        if not Path(symlink_file.local_filename).exists() and symlink_file.exists():
+                            symlink_file.download()
+                        with open(str(symlink_file.local_filename),'a+') as fw:
                             fw.write('{} -> {}\n'.format(f,str(destination_path)))
                         if symlink_file.filesystem == 's3':
-                            symlink_file.upload_from(str(symlink_file))
+                            symlink_file.upload_from(str(symlink_file.local_filename))
                         
             else:
                 if not destination_path.is_symlink() and not destination_path.exists():
                     os.symlink(f,str(destination_path.absolute()))
+
                     if symlink_db is not None:
                         symlink_file = GenericFile(symlink_db)
+                        if not Path(symlink_file.local_filename).exists() and symlink_file.exists():
+                            symlink_file.download()
                         with open(symlink_file.local_filename,'a+') as fw:
                             fw.write('{} -> {}\n'.format(str(destination_path),f))
                         if symlink_file.filesystem == 's3':
@@ -100,7 +117,8 @@ class Task():
         self.global_parameters = {'cache': True,
                              'cache_path': 'cache',
                              'cache_compression': 0,
-                             'output_path': 'experiments'}
+                             'output_path': 'experiments',
+                             'overwrite_export': True}
 
         if global_parameters:
             self.global_parameters.update(global_parameters)
@@ -218,7 +236,8 @@ class Task():
                         export_path=self.export_path,
                         compression_level=self.global_parameters['cache_compression'],
                         export=self.export,
-                        symlink_db=self.symlinkdb_path)
+                        symlink_db=self.symlinkdb_path,
+                        overwrite_export=self.global_parameters['overwrite_export'])
         return out_dict
 
     def _parallel_run_ray(self,run_async = False):

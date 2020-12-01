@@ -44,6 +44,9 @@ class GenericFile():
         else:
             return self.file_obj.is_symlink()
 
+    def unlink(self):
+        Path(self.local_filename).unlink()
+
     def absolute(self):
         if self.filesystem == 's3':
             return Path(self.file_obj.get_key()).absolute()
