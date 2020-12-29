@@ -16,6 +16,8 @@ import ray
 from shutil import copyfile
 import glob
 
+from swissknife.aws import get_instances_info
+
 from IPython import embed
 
 class TaskIO():
@@ -238,6 +240,7 @@ class Task():
                         export=self.export,
                         symlink_db=self.symlinkdb_path,
                         overwrite_export=self.global_parameters['overwrite_export'])
+
         return out_dict
 
     def _parallel_run_ray(self,run_async = False):
@@ -253,8 +256,17 @@ class Task():
             out = self.process()
             return out
 
+        if run_async:
+            node_settings = self.parameters.get('node',None)
+            if node_settings:
+                instances_info = get_instances_info()
+                from IPython import embed
+                embed()
+                
+
         iterable_vars = list(zip(*[self.parameters[k] for k in self.parameters['parallel']]))
-        pool = Pool(processes=self.parameters['n_cores'], initializer=set_niceness,initargs=(self.parameters['niceness'],))
+        n_cores = self.parameters.get('n_cores',4)
+        pool = Pool(processes=n_cores, initializer=set_niceness,initargs=(self.parameters['niceness'],),ray_address='auto') #(Run in same host it was called)
         outs = pool.map(worker_wrapper,iterable_vars)
 
         return self._process_outputs(outs)
@@ -263,11 +275,23 @@ class Task():
         if run_async:
             import ray
             import os
+            import sys
+
             def run_process_async(self):
                 os.nice(self.parameters['niceness'])
                 self.logger.info('{}: Setting niceness {}'.format(self.name, self.parameters['niceness']))
                 return self.process()
-            outs = ray.remote(run_process_async).remote(self)
+
+            node_settings = self.parameters.get('node',None)
+            resources = {}
+            if node_settings:
+                instances_info = get_instances_info()
+                for instance in instances_info:
+                    if 'name' in instance and 'PrivateIpAddress' in instance and instance['name'] in node_settings:
+                        resources['node:{}'.format(instance['PrivateIpAddress'])] = node_settings[instance['name']]
+                outs = ray.remote(run_process_async)._remote(args=[self],resources=resources)
+            else:
+                outs = ray.remote(run_process_async).remote(self)
         else:
             outs = self.process()
         return self._process_outputs(outs)
@@ -307,7 +331,10 @@ class Task():
                 out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=Path(cache_i).parts[-2].split('_')[-1]) for cache_i in cache_paths}
                 for task_name, task in out_dict.items():
                     task.create_link(Path(task.data).parent,Path(self.export_path))
-
+            elif run_async:
+                outs.append({'{}->ray_reference'.format(self.name): list(self._serial_run(run_async=run_async).values())[0],
+                       '{}->output_names'.format(self.name): TaskIO(self.output_names,self.get_hash(),iotype='data',name='output_names',position='1')})
+                self.output_names = ['ray_reference','output_names']
             else:
                 outs.append(self._serial_run(run_async=run_async))
             print('serial map')
@@ -330,6 +357,16 @@ class Task():
                     merge_map[k].extend([v])
 
         outs = tuple([[r.load() for r in merge_map['{}->{}'.format(self.name,name)]] for name in self.output_names])
+
+        #ray_out = []
+        #for v in merge_map.values():
+        #    if isinstance(v[0].load(),ray._raylet.ObjectRef):
+        #        ray_out.append(v[0].load())
+
+        #if len(ray_out)>0:
+        #    outs = tuple([ray_out for name in self.output_names])
+        #else:
+        #    outs = tuple([[r.load() for r in merge_map['{}->{}'.format(self.name,name)]] for name in self.output_names])
         
         return self._process_outputs(outs)
 
