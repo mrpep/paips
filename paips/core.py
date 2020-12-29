@@ -264,7 +264,8 @@ class Task():
                 
 
         iterable_vars = list(zip(*[self.parameters[k] for k in self.parameters['parallel']]))
-        pool = Pool(processes=2, initializer=set_niceness,initargs=(self.parameters['niceness'],))
+        n_cores = self.parameters.get('n_cores',4)
+        pool = Pool(processes=n_cores, initializer=set_niceness,initargs=(self.parameters['niceness'],),ray_address='auto') #(Run in same host it was called)
         outs = pool.map(worker_wrapper,iterable_vars)
 
         return self._process_outputs(outs)
@@ -273,6 +274,7 @@ class Task():
         if run_async:
             import ray
             import os
+            import sys
 
             def run_process_async(self):
                 os.nice(self.parameters['niceness'])
@@ -286,7 +288,6 @@ class Task():
                 for instance in instances_info:
                     if 'name' in instance and 'PrivateIpAddress' in instance and instance['name'] in node_settings:
                         resources['node:{}'.format(instance['PrivateIpAddress'])] = node_settings[instance['name']]
-                
                 outs = ray.remote(run_process_async)._remote(args=[self],resources=resources)
             else:
                 outs = ray.remote(run_process_async).remote(self)
