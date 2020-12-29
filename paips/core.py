@@ -16,6 +16,8 @@ import ray
 from shutil import copyfile
 import glob
 
+from swissknife.aws import get_instances_info
+
 from IPython import embed
 
 class TaskIO():
@@ -253,8 +255,16 @@ class Task():
             out = self.process()
             return out
 
+        if run_async:
+            node_settings = self.parameters.get('node',None)
+            if node_settings:
+                instances_info = get_instances_info()
+                from IPython import embed
+                embed()
+                
+
         iterable_vars = list(zip(*[self.parameters[k] for k in self.parameters['parallel']]))
-        pool = Pool(processes=self.parameters['n_cores'], initializer=set_niceness,initargs=(self.parameters['niceness'],))
+        pool = Pool(processes=2, initializer=set_niceness,initargs=(self.parameters['niceness'],))
         outs = pool.map(worker_wrapper,iterable_vars)
 
         return self._process_outputs(outs)
@@ -263,11 +273,23 @@ class Task():
         if run_async:
             import ray
             import os
+
             def run_process_async(self):
                 os.nice(self.parameters['niceness'])
                 self.logger.info('{}: Setting niceness {}'.format(self.name, self.parameters['niceness']))
                 return self.process()
-            outs = ray.remote(run_process_async).remote(self)
+
+            node_settings = self.parameters.get('node',None)
+            resources = {}
+            if node_settings:
+                instances_info = get_instances_info()
+                for instance in instances_info:
+                    if 'name' in instance and 'PrivateIpAddress' in instance and instance['name'] in node_settings:
+                        resources['node:{}'.format(instance['PrivateIpAddress'])] = node_settings[instance['name']]
+                
+                outs = ray.remote(run_process_async)._remote(args=[self],resources=resources)
+            else:
+                outs = ray.remote(run_process_async).remote(self)
         else:
             outs = self.process()
         return self._process_outputs(outs)
