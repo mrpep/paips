@@ -257,11 +257,12 @@ class Task():
             return out
 
         if run_async:
-            node_settings = self.parameters.get('node',None)
-            if node_settings:
-                instances_info = get_instances_info()
-                from IPython import embed
-                embed()
+            from IPython import embed
+            #node_settings = self.parameters.get('node',None)
+            #if node_settings:
+            #    instances_info = get_instances_info()
+            #    from IPython import embed
+            #    embed()
                 
 
         iterable_vars = list(zip(*[self.parameters[k] for k in self.parameters['parallel']]))
@@ -282,14 +283,14 @@ class Task():
                 self.logger.info('{}: Setting niceness {}'.format(self.name, self.parameters['niceness']))
                 return self.process()
 
-            node_settings = self.parameters.get('node',None)
-            resources = {}
-            if node_settings:
-                instances_info = get_instances_info()
-                for instance in instances_info:
-                    if 'name' in instance and 'PrivateIpAddress' in instance and instance['name'] in node_settings:
-                        resources['node:{}'.format(instance['PrivateIpAddress'])] = node_settings[instance['name']]
-                outs = ray.remote(run_process_async)._remote(args=[self],resources=resources)
+            resource_settings = self.parameters.get('resources',None)
+            #resources = {}
+            if resource_settings:
+            #    instances_info = get_instances_info()
+            #    for instance in instances_info:
+            #        if 'name' in instance and 'PrivateIpAddress' in instance and instance['name'] in node_settings:
+            #            resources['node:{}'.format(instance['PrivateIpAddress'])] = node_settings[instance['name']]
+                outs = ray.remote(run_process_async)._remote(args=[self],resources=resource_settings)
             else:
                 outs = ray.remote(run_process_async).remote(self)
         else:
