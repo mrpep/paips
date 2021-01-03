@@ -63,8 +63,10 @@ def main():
     if cluster_config:
         if cluster_config['manager'] == 'ray':
             import ray
-            ray.init(address= 'auto', log_to_driver=False)
-            #ray.init()
+            try:
+                ray.init(address= 'auto', log_to_driver=False) #If existing cluster connects to it
+            except:
+                ray.init(log_to_driver=False) #Else uses a local cluster
 
     def task_parameters_level_from_path(path):
         l = path.split('/')
