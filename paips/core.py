@@ -130,6 +130,7 @@ class Task():
 
         self.name = name
         self.valid_args=[]
+        self.default_no_cache: []
 
         self.parameters = parameters
 
@@ -204,10 +205,13 @@ class Task():
         for k,v in data.items():
             paths = self.hash_dict.find_path(k,action=lambda x: v.get_hash())
             if len(paths) > 0:
-                self.parameters.find_path(k,action=lambda x: v.load())
+                try:
+                    self.parameters.find_path(k,action=lambda x: v.load())
+                except:
+                    embed()
 
     def get_hash(self):
-        return self.hash_dict.hash()
+        return self.parameters.get('task_hash',self.hash_dict.hash())
         
     def process(self):
         pass
