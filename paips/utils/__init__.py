@@ -20,22 +20,24 @@ def apply_mods(modstr,config):
     
     yaml = YAML()
     if modstr is not None:
-        mods = modstr.split('&')
-        for mod in mods:
-            if '=' in mod:
-                mod_parts = mod.split('=')
-                mod_k = '='.join(mod_parts[:-1])
-                mod_v = mod_parts[-1]
-                #if mod_parts[1].startswith('['):
-                if '!' in mod_v:
-                    config[mod_k] = mod_v
-                #elif mod_parts[1].lower() == 'null':
-                #    config[mod_parts[0]] = None
-                else:
-                    config[mod_k] = yaml.load(mod_v)
+        if isinstance(modstr,str):
+            mods = modstr.split('&')
+            for mod in mods:
+                if '=' in mod:
+                    mod_parts = mod.split('=')
+                    mod_k = '='.join(mod_parts[:-1])
+                    mod_v = mod_parts[-1]
+                    #if mod_parts[1].startswith('['):
+                    if '!' in mod_v:
+                        config[mod_k] = mod_v
+                    #elif mod_parts[1].lower() == 'null':
+                    #    config[mod_parts[0]] = None
+                    else:
+                        config[mod_k] = yaml.load(mod_v)
+        elif isinstance(modstr,list):
+            for mod in modstr:
+                config.update(mod)
                 
-                    
-
 def get_delete_param(dictionary,param,default_value=None):
     if param in dictionary:
         return dictionary.pop(param)
