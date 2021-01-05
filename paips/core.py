@@ -271,7 +271,7 @@ class Task():
 
         iterable_vars = list(zip(*[self.parameters[k] for k in self.parameters['parallel']]))
         n_cores = self.parameters.get('n_cores',4)
-        pool = Pool(processes=n_cores, initializer=set_niceness,initargs=(self.parameters.get('niceness',20),ray_address='auto') #(Run in same host it was called)
+        pool = Pool(processes=n_cores, initializer=set_niceness,initargs=(self.parameters.get('niceness',20),),ray_address='auto') #(Run in same host it was called)
         outs = pool.map(worker_wrapper,iterable_vars)
 
         return self._process_outputs(outs)
