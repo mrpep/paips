@@ -288,13 +288,14 @@ class Task():
                 return self.process()
 
             resource_settings = self.parameters.get('resources',None)
-            #resources = {}
+            if resource_settings and 'gpus' in resource_settings:
+                num_gpus = resource_settings['gpus']
+                resource_settings.pop('gpus')
+            else:
+                num_gpus = 0
+                
             if resource_settings:
-            #    instances_info = get_instances_info()
-            #    for instance in instances_info:
-            #        if 'name' in instance and 'PrivateIpAddress' in instance and instance['name'] in node_settings:
-            #            resources['node:{}'.format(instance['PrivateIpAddress'])] = node_settings[instance['name']]
-                outs = ray.remote(run_process_async)._remote(args=[self],resources=resource_settings)
+                outs = ray.remote(run_process_async)._remote(args=[self],resources=resource_settings, num_gpus=num_gpus)
             else:
                 outs = ray.remote(run_process_async).remote(self)
         else:
@@ -545,7 +546,18 @@ class TaskGraph(Task):
         """
 
         remaining_tasks = [task.name for task in self.dependency_order]
-        
+        run_from = self.parameters.get('run_from',None)
+        also_run = self.parameters.get('also_run',None)
+        if run_from:
+            idx_run_from = remaining_tasks.index(run_from)
+            runnable_tasks = remaining_tasks[idx_run_from:]
+            if also_run:
+                if not isinstance(also_run,list):
+                    also_run = [also_run]
+                runnable_tasks = runnable_tasks + also_run
+        else:
+            runnable_tasks = copy.deepcopy(remaining_tasks)
+            
         self.tasks_io = {}
 
         inputs = self.parameters.get('in',None)
@@ -564,7 +576,11 @@ class TaskGraph(Task):
             task.send_dependency_data(self.tasks_io)
             if task.parameters['class'] == 'WANDBExperiment':
                 task.config = self.parameters.to_shallow()
-            out_dict = task.run()
+            if task.name not in runnable_tasks:
+                outs = [None for out in task.output_names]
+                out_dict = {'{}{}{}'.format(task.name,symbols['dot'],out_name): TaskIO(out_val,task.get_hash(),iotype='data',name=out_name,position=str(i)) for i, (out_name, out_val) in enumerate(zip(task.output_names,outs))}
+            else:
+                out_dict = task.run()
 
             self.tasks_io.update(out_dict)
             remaining_tasks.remove(task.name)
