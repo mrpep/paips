@@ -254,7 +254,7 @@ class Task():
             os.nice(niceness)
 
         def worker_wrapper(x):
-            os.nice(self.parameters['niceness'])
+            os.nice(self.parameters.get('niceness',20))
             for k, v in zip(self.parameters['parallel'],x):
                 self.parameters[k] = v
             out = self.process()
@@ -271,7 +271,7 @@ class Task():
 
         iterable_vars = list(zip(*[self.parameters[k] for k in self.parameters['parallel']]))
         n_cores = self.parameters.get('n_cores',4)
-        pool = Pool(processes=n_cores, initializer=set_niceness,initargs=(self.parameters['niceness'],),ray_address='auto') #(Run in same host it was called)
+        pool = Pool(processes=n_cores, initializer=set_niceness,initargs=(self.parameters.get('niceness',20),ray_address='auto') #(Run in same host it was called)
         outs = pool.map(worker_wrapper,iterable_vars)
 
         return self._process_outputs(outs)
@@ -283,8 +283,8 @@ class Task():
             import sys
 
             def run_process_async(self):
-                os.nice(self.parameters['niceness'])
-                self.logger.info('{}: Setting niceness {}'.format(self.name, self.parameters['niceness']))
+                os.nice(self.parameters.get('niceness',20))
+                self.logger.info('{}: Setting niceness {}'.format(self.name, self.parameters.get('niceness',20)))
                 return self.process()
 
             resource_settings = self.parameters.get('resources',None)
