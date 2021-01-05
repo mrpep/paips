@@ -577,6 +577,7 @@ class TaskGraph(Task):
             if task.parameters['class'] == 'WANDBExperiment':
                 task.config = self.parameters.to_shallow()
             if task.name not in runnable_tasks:
+                self.logger.info('Skipping {}'.format(task.name))
                 outs = [None for out in task.output_names]
                 out_dict = {'{}{}{}'.format(task.name,symbols['dot'],out_name): TaskIO(out_val,task.get_hash(),iotype='data',name=out_name,position=str(i)) for i, (out_name, out_val) in enumerate(zip(task.output_names,outs))}
             else:
