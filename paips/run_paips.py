@@ -7,9 +7,52 @@ from paips.core import TaskGraph
 from paips.utils.settings import symbols
 from paips.utils import logger, apply_mods
 from kahnfigh import Config
-from kahnfigh.utils import IgnorableTag, merge_configs
+from kahnfigh.utils import IgnorableTag, merge_configs,replace_in_config
 from ruamel.yaml import YAML
 from io import StringIO
+from pathlib import Path
+
+def replace_vars(main_config, global_config):
+    main_config.find_path(symbols['insert_variable'],mode='startswith',action=lambda x: global_config[x.split(symbols['insert_variable'])[-1]])
+
+def add_includes(main_config, special_tags,global_config):
+    for k in main_config.find_keys('include'):
+        includes = main_config[k]
+        imported_configs = []
+        for include_config in includes:
+            yaml_to_include = Path(main_config.yaml_path.parent,include_config.pop('config'))
+            imported_config = Config(yaml_to_include,special_tags=special_tags)
+            for r,v in include_config.items():
+                r='({})'.format(r)
+                imported_config = replace_in_config(imported_config,r,v)
+            if '/' in k:
+                k_parent = '/'.join(k.split('/')[:-1])
+            else:
+                k_parent = None
+            imported_config = process_config(imported_config,special_tags,global_config)
+            imported_configs.append(imported_config)
+        main_config.pop(k)
+        if k_parent:
+            new_config = merge_configs([Config(main_config[k_parent])]+imported_configs)
+            main_config[k_parent] = new_config
+        else:
+            main_config = merge_configs([Config(main_config)]+imported_configs)
+
+    return main_config
+
+def process_config(config,special_tags,global_config):
+    replace_vars(config,global_config)
+    global_config.update(config.get('global',{}))
+    config.find_path(symbols['insert_config'],mode='startswith',action=lambda x: process_config(Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags),special_tags=special_tags,global_config=global_config))
+    global_config.update(config.get('global',{}))
+    config = add_includes(config,special_tags,global_config)
+    global_config.update(config.get('global',{}))
+
+    return config
+
+def replace_yamls(main_config, special_tags):
+    main_config.find_path(symbols['insert_config'],mode='startswith',action=lambda x: Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags))
+    return main_config
 
 def main():
     argparser = argparse.ArgumentParser(description='Run pipeline from configs')
@@ -27,7 +70,8 @@ def main():
     special_tags = [IgnorableTag(tag) for tag in ignorable_tags]
 
     configs = [Config(path_i, special_tags = special_tags) for path_i in args['config_path']]
-    main_config = merge_configs(configs)
+    #main_config = merge_configs(configs)
+    main_config = configs[0]
 
     apply_mods(args['mods'], main_config)
 
@@ -49,10 +93,15 @@ def main():
 
     #Embed external configs and global variables
 
-    main_config.find_path(symbols['insert_config'],mode='startswith',action=lambda x: Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags))
-    global_config = main_config['global']
-    main_config.find_path(symbols['insert_variable'],mode='startswith',action=lambda x: global_config[x.split(symbols['insert_variable'])[-1]])
+    main_config = process_config(main_config,special_tags,global_config)
 
+    
+    #main_config = add_includes(main_config)
+    #main_config = replace_vars(main_config)
+    #main_config = replace_yamls(main_config, special_tags)
+    #global_config = main_config['global']
+    #main_config = replace_vars(main_config)
+    
     default_cluster_config = {
     'manager': 'ray',
     'n_cores': 1,
