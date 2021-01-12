@@ -16,6 +16,8 @@ from .diagnose import *
 from .distributed import *
 from .file import *
 
+from kahnfigh import Config
+
 def apply_mods(modstr,config):
     
     yaml = YAML()
@@ -36,7 +38,7 @@ def apply_mods(modstr,config):
                         config[mod_k] = yaml.load(mod_v)
         elif isinstance(modstr,list):
             for mod in modstr:
-                config.update(mod)
+                config.update(Config(mod).to_shallow())
                 
 def get_delete_param(dictionary,param,default_value=None):
     if param in dictionary:
