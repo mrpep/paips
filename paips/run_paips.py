@@ -11,9 +11,60 @@ from kahnfigh.utils import IgnorableTag, merge_configs,replace_in_config
 from ruamel.yaml import YAML
 from io import StringIO
 from pathlib import Path
+import copy
 
-def replace_vars(main_config, global_config):
-    main_config.find_path(symbols['insert_variable'],mode='startswith',action=lambda x: global_config[x.split(symbols['insert_variable'])[-1]])
+from IPython import embed
+
+#def replace_vars(main_config, global_config):
+#    main_config.find_path(symbols['insert_variable'],mode='startswith',action=lambda x: global_config[x.split(symbols['insert_variable'])[-1]] if x.split(symbols['insert_variable'])[-1] in global_config else x)
+
+def replace_vars(config, global_config, missing_paths):
+    found_paths = config.find_path(symbols['insert_variable'],mode='startswith')
+    for path in found_paths:
+        tag_data = config[path]
+        var_to_insert = tag_data.split(symbols['insert_variable'])[-1]
+        if var_to_insert not in global_config:
+            missing_paths.append(var_to_insert)
+        else:
+            config[path] = global_config[var_to_insert]
+
+def insert_yaml_value(config,special_tags,global_config,missing_paths):
+    found_paths = config.find_path(symbols['insert_config'],mode='startswith')
+    #,action=lambda x: process_config(Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags),special_tags=special_tags,global_config=global_config)
+    for path in found_paths:
+        tag_data = config[path]
+        insert_yaml_path = tag_data.split(symbols['insert_config'])[-1]
+        insert_config = Config(insert_yaml_path,special_tags=special_tags)
+        global_config.update(insert_config.get('global',{}))
+        insert_config = process_config(insert_config,special_tags,global_config,missing_paths)
+        config[path] = insert_config
+
+def include_config(config,special_tags,global_config,missing_paths):
+    found_paths = config.find_keys('include')
+    for p in found_paths:
+        includes = config[p]
+        for include_config in includes:
+            path_yaml_to_include = Path(config.yaml_path.parent,include_config.pop('config'))
+            imported_config = Config(path_yaml_to_include,special_tags=special_tags)
+            for r,v in include_config.items():
+                r='({})'.format(r)
+                imported_config = replace_in_config(imported_config,r,v)
+            if '/' in p:
+                p_parent = '/'.join(p.split('/')[:-1])
+            else:
+                p_parent = None
+            imported_config = process_config(imported_config,special_tags,global_config,missing_paths)
+            if p_parent:
+                p_config = Config(config[p_parent])
+                p_config.yaml_path = config.yaml_path
+                new_config = merge_configs([p_config,imported_config])
+                config[p_parent] = new_config
+            else:
+                original_yaml_path = config.yaml_path
+                config = merge_configs([Config(config),imported_config])
+                config.yaml_path = original_yaml_path
+        config.pop(p)
+    return config
 
 def add_includes(main_config, special_tags,global_config):
     for k in main_config.find_keys('include'):
@@ -21,6 +72,7 @@ def add_includes(main_config, special_tags,global_config):
         imported_configs = []
         for include_config in includes:
             yaml_to_include = Path(main_config.yaml_path.parent,include_config.pop('config'))
+            print('Including {} from config {}'.format(yaml_to_include,main_config.yaml_path))
             imported_config = Config(yaml_to_include,special_tags=special_tags)
             for r,v in include_config.items():
                 r='({})'.format(r)
@@ -37,16 +89,23 @@ def add_includes(main_config, special_tags,global_config):
             main_config[k_parent] = new_config
         else:
             main_config = merge_configs([Config(main_config)]+imported_configs)
+        
 
     return main_config
 
-def process_config(config,special_tags,global_config):
-    replace_vars(config,global_config)
+def process_config(config,special_tags,global_config,missing_paths):
+    replace_vars(config,global_config, missing_paths)
     global_config.update(config.get('global',{}))
-    config.find_path(symbols['insert_config'],mode='startswith',action=lambda x: process_config(Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags),special_tags=special_tags,global_config=global_config))
+    insert_yaml_value(config, special_tags, global_config, missing_paths)
     global_config.update(config.get('global',{}))
-    config = add_includes(config,special_tags,global_config)
-    global_config.update(config.get('global',{}))
+    config = include_config(config,special_tags,global_config,missing_paths)
+
+    #replace_vars(config,global_config)
+    #global_config.update(config.get('global',{}))
+    #config.find_path(symbols['insert_config'],mode='startswith',action=lambda x: process_config(Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags),special_tags=special_tags,global_config=global_config))
+    #global_config.update(config.get('global',{}))
+    #add_includes(config,special_tags,global_config)
+    #global_config.update(config.get('global',{}))
 
     return config
 
@@ -93,9 +152,19 @@ def main():
 
     #Embed external configs and global variables
 
-    main_config = process_config(main_config,special_tags,global_config)
+    missing_paths = []
+    main_config = process_config(main_config,special_tags,global_config,missing_paths)
+    n_tries = 20
 
-    
+    while n_tries>0 and len(missing_paths)>0:
+        n_tries-=1
+        global_config.update(main_config['global'])
+        missing_paths = []
+        main_config = process_config(main_config,special_tags,global_config,missing_paths)
+
+    if len(missing_paths)>0:
+        raise Exception('Cannot resolve tags: {}'.format(missing_paths))
+
     #main_config = add_includes(main_config)
     #main_config = replace_vars(main_config)
     #main_config = replace_yamls(main_config, special_tags)
