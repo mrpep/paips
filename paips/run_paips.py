@@ -44,25 +44,29 @@ def include_config(config,special_tags,global_config,missing_paths):
     for p in found_paths:
         includes = config[p]
         for include_config in includes:
-            path_yaml_to_include = Path(config.yaml_path.parent,include_config.pop('config'))
-            imported_config = Config(path_yaml_to_include,special_tags=special_tags)
-            for r,v in include_config.items():
-                r='({})'.format(r)
-                imported_config = replace_in_config(imported_config,r,v)
-            if '/' in p:
-                p_parent = '/'.join(p.split('/')[:-1])
-            else:
-                p_parent = None
-            imported_config = process_config(imported_config,special_tags,global_config,missing_paths)
-            if p_parent:
-                p_config = Config(config[p_parent])
-                p_config.yaml_path = config.yaml_path
-                new_config = merge_configs([p_config,imported_config])
-                config[p_parent] = new_config
-            else:
-                original_yaml_path = config.yaml_path
-                config = merge_configs([Config(config),imported_config])
-                config.yaml_path = original_yaml_path
+            if include_config.get('enable',True) and include_config.get('config',None):               
+                path_yaml_to_include = Path(config.yaml_path.parent,include_config.pop('config'))
+                imported_config = Config(path_yaml_to_include,special_tags=special_tags)
+                mods = include_config.get('mods',None)
+                if mods:
+                    raise Exception('Mods not implemented in include')
+                for r,v in include_config.items():
+                    r='({})'.format(r)
+                    imported_config = replace_in_config(imported_config,r,v)
+                if '/' in p:
+                    p_parent = '/'.join(p.split('/')[:-1])
+                else:
+                    p_parent = None
+                imported_config = process_config(imported_config,special_tags,global_config,missing_paths)
+                if p_parent:
+                    p_config = Config(config[p_parent])
+                    p_config.yaml_path = config.yaml_path
+                    new_config = merge_configs([p_config,imported_config])
+                    config[p_parent] = new_config
+                else:
+                    original_yaml_path = config.yaml_path
+                    config = merge_configs([Config(config),imported_config])
+                    config.yaml_path = original_yaml_path
         config.pop(p)
     return config
 
