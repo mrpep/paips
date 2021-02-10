@@ -211,7 +211,11 @@ class Task():
                     embed()
 
     def get_hash(self):
-        return self.parameters.get('task_hash',self.hash_dict.hash())
+        task_hash =  self.parameters.get('task_hash',None)
+        if task_hash is None:
+            return self.hash_dict.hash()
+        else:
+            return task_hash
         
     def process(self):
         pass

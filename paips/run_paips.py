@@ -167,7 +167,11 @@ def main():
         main_config = process_config(main_config,special_tags,global_config,missing_paths)
 
     if len(missing_paths)>0:
-        raise Exception('Cannot resolve tags: {}'.format(missing_paths))
+        print('Warning: Cannot resolve tags {}'.format(missing_paths))
+        for k in missing_paths:
+            global_config[k] = None
+        missing_paths = []
+        main_config = process_config(main_config,special_tags,global_config,missing_paths)
 
     #main_config = add_includes(main_config)
     #main_config = replace_vars(main_config)
