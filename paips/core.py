@@ -1,7 +1,10 @@
-from .utils import (get_delete_param, make_hash, search_dependencies, 
-search_replace, find_cache, get_modules, get_classes_in_module, 
-make_graph_from_tasks, symbols, method_wrapper, GenericFile,
-apply_mods)
+from .utils.config_processors import (get_delete_param, apply_mods)
+from .utils.nested import (search_replace, search_dependencies)
+from .utils.cache import (make_hash, find_cache)
+from .utils.graphs import make_graph_from_tasks
+from .utils.modiuls import (get_modules, get_classes_in_module)
+from .utils.file import GenericFile
+from .utils.settings import symbols
 
 import copy
 import numpy as np
@@ -114,7 +117,7 @@ class TaskIO():
         self.__dict__ = d
 
 class Task():
-    def __init__(self, parameters, global_parameters=None, name=None, logger=None):
+    def __init__(self, parameters, global_parameters=None, name=None, logger=None, simulate=False):
 
         self.global_parameters = {'cache': True,
                              'cache_path': 'cache',
@@ -133,6 +136,8 @@ class Task():
         self.default_no_cache: []
 
         self.parameters = parameters
+
+        self.simulate = simulate
 
         #self.output_names =    get_delete_param(self.parameters,'output_names',['out'])
         self.output_names = self.parameters.pop('output_names',['out'])
@@ -209,6 +214,10 @@ class Task():
                     self.parameters.find_path(k,action=lambda x: v.load())
                 except:
                     embed()
+            else:
+                if self.simulate and not k.startswith('self'):
+                    k_ = k.split('->')[0]+'->'
+                    paths = self.hash_dict.find_path(k_,action=lambda x: v.get_hash(),mode='startswith')
 
     def get_hash(self):
         task_hash =  self.parameters.get('task_hash',None)
@@ -425,12 +434,13 @@ class Task():
         return out_dict
 
 class TaskGraph(Task):
-    def __init__(self,parameters,global_parameters=None, name=None, logger=None):
+    def __init__(self,parameters,global_parameters=None, name=None, logger=None, simulate=False):
         super().__init__(parameters,global_parameters,name,logger)
         #Gather modules:
         self.external_modules = self.parameters.get('modules',[])
         self.external_modules = self.external_modules + self.global_parameters.get('modules',[])
         self.target = self.parameters.get('target',None)
+        self.simulate = simulate
 
         self.load_modules()
         #Build the graph
@@ -561,7 +571,7 @@ class TaskGraph(Task):
                 runnable_tasks = runnable_tasks + also_run
         else:
             runnable_tasks = copy.deepcopy(remaining_tasks)
-            
+
         self.tasks_io = {}
 
         inputs = self.parameters.get('in',None)
@@ -580,10 +590,14 @@ class TaskGraph(Task):
             task.send_dependency_data(self.tasks_io)
             if task.parameters['class'] == 'WANDBExperiment':
                 task.config = self.parameters.to_shallow()
-            if task.name not in runnable_tasks:
-                self.logger.info('Skipping {}'.format(task.name))
-                outs = [None for out in task.output_names]
-                out_dict = {'{}{}{}'.format(task.name,symbols['dot'],out_name): TaskIO(out_val,task.get_hash(),iotype='data',name=out_name,position=str(i)) for i, (out_name, out_val) in enumerate(zip(task.output_names,outs))}
+            if task.name not in runnable_tasks or self.simulate:
+                if task.parameters['class'] == 'TaskGraph':
+                    task.simulate = True
+                    out_dict = task.run()
+                else:
+                    self.logger.info('Skipping {}'.format(task.name))
+                    outs = [None for out in task.output_names]
+                    out_dict = {'{}{}{}'.format(task.name,symbols['dot'],out_name): TaskIO(out_val,task.get_hash(),iotype='data',name=out_name,position=str(i)) for i, (out_name, out_val) in enumerate(zip(task.output_names,outs))}
             else:
                 out_dict = task.run()
 

@@ -17,35 +17,7 @@ from .distributed import *
 from .file import *
 
 from kahnfigh import Config
-
-def apply_mods(modstr,config):
-    
-    yaml = YAML()
-    if modstr is not None:
-        if isinstance(modstr,str):
-            mods = modstr.split('&')
-            for mod in mods:
-                if '=' in mod:
-                    mod_parts = mod.split('=')
-                    mod_k = '='.join(mod_parts[:-1])
-                    mod_v = mod_parts[-1]
-                    #if mod_parts[1].startswith('['):
-                    if '!' in mod_v:
-                        config[mod_k] = mod_v
-                    #elif mod_parts[1].lower() == 'null':
-                    #    config[mod_parts[0]] = None
-                    else:
-                        config[mod_k] = yaml.load(mod_v)
-        elif isinstance(modstr,list):
-            for mod in modstr:
-                config.update(Config(mod).to_shallow())
                 
-def get_delete_param(dictionary,param,default_value=None):
-    if param in dictionary:
-        return dictionary.pop(param)
-    else:
-        return default_value
-
 def load_pickle(path):
     with open(path, 'rb') as fp:
         return pickle.load(fp)
@@ -63,11 +35,6 @@ def load_or_dump(obj, path, cache=False):
         Path(path.parent).mkdir(parents=True, exist_ok=True)
         dump_pickle(obj, path)
         return obj
-
-def get_config(filename):
-    yaml = YAML(typ='safe')
-    config = yaml.load(Path(filename))
-    return config
 
 def save_config(config,filename):
     yaml = YAML(typ='safe')
