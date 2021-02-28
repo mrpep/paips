@@ -131,11 +131,22 @@ def add_includes(main_config, special_tags,global_config):
 
     return main_config
 
+def add_missing(dict_to_update, defaults):
+    keys_to_delete = []
+    for k,v in defaults.items():
+        if k not in dict_to_update:
+            dict_to_update[k] = v
+            keys_to_delete.append(k)
+    for k in keys_to_delete:
+        defaults.pop(k)
+
 def process_config(config,special_tags,global_config,missing_paths):
     replace_vars(config,global_config, missing_paths)
     global_config.update(config.get('global',{}))
+    add_missing(global_config,config.get('defaults', {}))
     insert_yaml_value(config, special_tags, global_config, missing_paths)
     global_config.update(config.get('global',{}))
+    add_missing(global_config,config.get('defaults', {}))
     config = include_config(config,special_tags,global_config,missing_paths)
 
     return config

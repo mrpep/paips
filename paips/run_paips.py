@@ -37,7 +37,9 @@ def main():
 
     paips_logger = logger.get_logger('Paips','logs')
     main_config = load_experiment(args['config_path'], mods=args['mods'],global_config=global_config, logger=paips_logger)
-
+    if 'defaults' in main_config:
+        main_config.pop('defaults')
+        
     if 'cluster_config' in main_config:
         cluster_config = main_config['cluster_config']
         if cluster_config['manager'] == 'ray':
