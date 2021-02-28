@@ -48,6 +48,8 @@ def replace_vars(config, global_config, missing_paths):
         else:
             config[path] = global_config[var_to_insert]
 
+
+
 def insert_yaml_value(config,special_tags,global_config,missing_paths):
     found_paths = config.find_path(symbols['insert_config'],mode='startswith')
     #,action=lambda x: process_config(Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags),special_tags=special_tags,global_config=global_config)
@@ -63,6 +65,18 @@ def include_config(config,special_tags,global_config,missing_paths):
     found_paths = config.find_keys('include')
     for p in found_paths:
         includes = config[p]
+        switch = None
+        if isinstance(includes,dict):
+            switch = includes.get('switch',None)
+        if switch is not None:
+            if not isinstance(switch,list):
+                switch = [switch]
+            filtered_includes = []
+            for include_config in includes['configs']:
+                if include_config.get('name',None) in switch:
+                    filtered_includes.append(include_config)
+            includes = filtered_includes
+
         for include_config in includes:
             if include_config.get('enable',True) and include_config.get('config',None):               
                 path_yaml_to_include = Path(config.yaml_path.parent,include_config.pop('config'))
@@ -154,6 +168,7 @@ def apply_mods(modstr,config):
                     #    config[mod_parts[0]] = None
                     else:
                         config[mod_k] = yaml.load(mod_v)
+                        
         elif isinstance(modstr,list):
             for mod in modstr:
                 config.update(Config(mod).to_shallow())
