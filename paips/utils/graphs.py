@@ -5,11 +5,16 @@ from .settings import symbols
 from kahnfigh.utils import IgnorableTag, merge_configs, replace_in_config
 from .config_processors import apply_mods, task_parameters_level_from_path, process_config
 from ruamel.yaml import YAML
+import fnmatch
+
+
 
 def make_graph_from_tasks(task_nodes):
     graph = nx.DiGraph()
     for task_name, task in task_nodes.items():
         dependencies = task.search_dependencies()
+        dependencies = [fnmatch.filter(list(task_nodes.keys()), d) if '*' in d else d for d in dependencies]
+        dependencies = [d_i if isinstance(d,list) else d for d in dependencies for d_i in d]
         if len(dependencies)>0:
             for dependency in dependencies:
                 graph.add_edge(task_nodes[dependency],task)
@@ -49,14 +54,14 @@ def load_experiment(configs, mods=None, global_config=None, logger=None):
         global_config.update(main_config['global'])
         default_config.update(main_config.get('default',{}))
         missing_paths = []
-        main_config = process_config(main_config,special_tags,global_config,default_config, missing_paths)
+        main_config = process_config(main_config,special_tags,global_config,default_config,missing_paths)
 
     if len(missing_paths)>0:
         print('Warning: Cannot resolve tags {}'.format(missing_paths))
         for k in missing_paths:
             global_config[k] = None
         missing_paths = []
-        main_config = process_config(main_config,special_tags,global_config,missing_paths)
+        main_config = process_config(main_config,special_tags,global_config,default_config,missing_paths)
 
     default_cluster_config = {
         'manager': 'ray',

@@ -18,6 +18,7 @@ import os
 import ray
 from shutil import copyfile
 import glob
+import fnmatch
 
 from swissknife.aws import get_instances_info
 
@@ -207,6 +208,9 @@ class Task():
         """
         Replace TaskIOs in parameters with the corresponding data. Also adds its associated hashes to the hash dictionary
         """
+        glob_keys = self.parameters.find_path('*',mode='contains',action=lambda x: fnmatch.filter(list(data.keys()),x) if '->' in x else x)
+        glob_keys = self.hash_dict.find_path('*',mode='contains',action=lambda x: fnmatch.filter(list(data.keys()),x) if '->' in x else x)
+        
         for k,v in data.items():
             paths = self.hash_dict.find_path(k,action=lambda x: v.get_hash())
             if len(paths) > 0:
@@ -452,6 +456,9 @@ class TaskGraph(Task):
 
     def send_dependency_data(self,data,ignore_map=False):
         #Override task method so that in this case, data keeps being a TaskIO
+        glob_keys = self.parameters.find_path('*',mode='contains',action=lambda x: fnmatch.filter(list(data.keys()),x) if '->' in x else x)
+        glob_keys = self.hash_dict.find_path('*',mode='contains',action=lambda x: fnmatch.filter(list(data.keys()),x) if '->' in x else x)
+
         for k,v in data.items():
             paths = self.hash_dict.find_path(k,action=lambda x: v.get_hash())
             if len(paths) > 0:
@@ -466,7 +473,10 @@ class TaskGraph(Task):
         """
         self.task_nodes = {}
         for task_name, task_config in self.parameters['Tasks'].items():
-            task_class = task_config['class']
+            try:
+                task_class = task_config['class']
+            except:
+                embed()
             if task_class == 'TaskGraph':
                 task_obj = TaskGraph
                 task_modules = task_config.get('modules',None)
