@@ -15,11 +15,6 @@ import copy
 
 from paips.core import TaskGraph
 
-from IPython import embed
-
-#def replace_vars(main_config, global_config):
-#    main_config.find_path(symbols['insert_variable'],mode='startswith',action=lambda x: global_config[x.split(symbols['insert_variable'])[-1]] if x.split(symbols['insert_variable'])[-1] in global_config else x)
-
 def main():
     argparser = argparse.ArgumentParser(description='Run pipeline from configs')
     argparser.add_argument('config_path', help='Path to YAML config file for running experiment', nargs='+')
@@ -39,7 +34,7 @@ def main():
     main_config = load_experiment(args['config_path'], mods=args['mods'],global_config=global_config, logger=paips_logger)
     if 'defaults' in main_config:
         main_config.pop('defaults')
-        
+  
     if 'cluster_config' in main_config:
         cluster_config = main_config['cluster_config']
         if cluster_config['manager'] == 'ray':

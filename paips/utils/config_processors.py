@@ -50,7 +50,7 @@ def replace_vars(config, global_config, missing_paths):
 
 
 
-def insert_yaml_value(config,special_tags,global_config,missing_paths):
+def insert_yaml_value(config,special_tags,global_config,default_config,missing_paths):
     found_paths = config.find_path(symbols['insert_config'],mode='startswith')
     #,action=lambda x: process_config(Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags),special_tags=special_tags,global_config=global_config)
     for path in found_paths:
@@ -58,10 +58,12 @@ def insert_yaml_value(config,special_tags,global_config,missing_paths):
         insert_yaml_path = tag_data.split(symbols['insert_config'])[-1]
         insert_config = Config(insert_yaml_path,special_tags=special_tags)
         global_config.update(insert_config.get('global',{}))
-        insert_config = process_config(insert_config,special_tags,global_config,missing_paths)
+        if 'defaults' in insert_config:
+            default_config.update(insert_config.pop('defaults'))
+        insert_config = process_config(insert_config,special_tags,global_config,default_config,missing_paths)
         config[path] = insert_config
 
-def include_config(config,special_tags,global_config,missing_paths):
+def include_config(config,special_tags,global_config,default_config,missing_paths):
     found_paths = config.find_keys('include')
     for p in found_paths:
         includes = config[p]
@@ -81,6 +83,8 @@ def include_config(config,special_tags,global_config,missing_paths):
             if include_config.get('enable',True) and include_config.get('config',None):               
                 path_yaml_to_include = Path(config.yaml_path.parent,include_config.pop('config'))
                 imported_config = Config(path_yaml_to_include,special_tags=special_tags)
+                if 'defaults' in imported_config:
+                    default_config.update(imported_config.pop('defaults'))
                 mods = include_config.get('mods',None)
                 if mods:
                     raise Exception('Mods not implemented in include')
@@ -91,7 +95,7 @@ def include_config(config,special_tags,global_config,missing_paths):
                     p_parent = '/'.join(p.split('/')[:-1])
                 else:
                     p_parent = None
-                imported_config = process_config(imported_config,special_tags,global_config,missing_paths)
+                imported_config = process_config(imported_config,special_tags,global_config,default_config,missing_paths)
                 if p_parent:
                     p_config = Config(config[p_parent])
                     p_config.yaml_path = config.yaml_path
@@ -104,33 +108,6 @@ def include_config(config,special_tags,global_config,missing_paths):
         config.pop(p)
     return config
 
-def add_includes(main_config, special_tags,global_config):
-    for k in main_config.find_keys('include'):
-        includes = main_config[k]
-        imported_configs = []
-        for include_config in includes:
-            yaml_to_include = Path(main_config.yaml_path.parent,include_config.pop('config'))
-            print('Including {} from config {}'.format(yaml_to_include,main_config.yaml_path))
-            imported_config = Config(yaml_to_include,special_tags=special_tags)
-            for r,v in include_config.items():
-                r='({})'.format(r)
-                imported_config = replace_in_config(imported_config,r,v)
-            if '/' in k:
-                k_parent = '/'.join(k.split('/')[:-1])
-            else:
-                k_parent = None
-            imported_config = process_config(imported_config,special_tags,global_config)
-            imported_configs.append(imported_config)
-        main_config.pop(k)
-        if k_parent:
-            new_config = merge_configs([Config(main_config[k_parent])]+imported_configs)
-            main_config[k_parent] = new_config
-        else:
-            main_config = merge_configs([Config(main_config)]+imported_configs)
-        
-
-    return main_config
-
 def add_missing(dict_to_update, defaults):
     keys_to_delete = []
     for k,v in defaults.items():
@@ -140,14 +117,14 @@ def add_missing(dict_to_update, defaults):
     for k in keys_to_delete:
         defaults.pop(k)
 
-def process_config(config,special_tags,global_config,missing_paths):
+def process_config(config,special_tags,global_config,default_config,missing_paths):
     replace_vars(config,global_config, missing_paths)
     global_config.update(config.get('global',{}))
-    add_missing(global_config,config.get('defaults', {}))
-    insert_yaml_value(config, special_tags, global_config, missing_paths)
+    add_missing(global_config,default_config)
+    insert_yaml_value(config, special_tags, global_config, default_config, missing_paths)
     global_config.update(config.get('global',{}))
-    add_missing(global_config,config.get('defaults', {}))
-    config = include_config(config,special_tags,global_config,missing_paths)
+    add_missing(global_config,default_config)
+    config = include_config(config,special_tags,global_config,default_config,missing_paths)
 
     return config
 

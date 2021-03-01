@@ -32,6 +32,7 @@ def load_experiment(configs, mods=None, global_config=None, logger=None):
     if global_config is None:
         global_config = {}
     global_config.update(main_config.get('global',{}))
+    default_config = main_config.get('defaults', {})
 
     if 'global' in main_config:
         main_config['global'].update(global_config)
@@ -40,14 +41,15 @@ def load_experiment(configs, mods=None, global_config=None, logger=None):
 
     #Config processing/merging/expanding
     missing_paths = []
-    main_config = process_config(main_config,special_tags,global_config,missing_paths)
+    main_config = process_config(main_config,special_tags,global_config,default_config,missing_paths)
     n_tries = 20
 
     while n_tries>0 and len(missing_paths)>0:
         n_tries-=1
         global_config.update(main_config['global'])
+        default_config.update(main_config.get('default',{}))
         missing_paths = []
-        main_config = process_config(main_config,special_tags,global_config,missing_paths)
+        main_config = process_config(main_config,special_tags,global_config,default_config, missing_paths)
 
     if len(missing_paths)>0:
         print('Warning: Cannot resolve tags {}'.format(missing_paths))
