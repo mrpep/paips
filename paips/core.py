@@ -400,12 +400,14 @@ class Task():
         self.export_dir = Path(self.global_parameters['output_path'],self.name)
         self.return_as_function = self.parameters.get('return_as_function',False)
         self.return_as_class = self.parameters.get('return_as_class',False)
-        self.logger.info('{}: Hash {}'.format(self.name,self.task_hash))
+        if self.logger is not None:
+            self.logger.info('{}: Hash {}'.format(self.name,self.task_hash))
         
         cache_paths = self.find_cache()
 
         if self.cache and cache_paths:
-            self.logger.info('{}: Caching'.format(self.name))
+            if self.logger is not None:
+                self.logger.info('{}: Caching'.format(self.name))
 
             out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=Path(cache_i).parts[-2].split('_')[-1]) for cache_i in cache_paths}
             for task_name, task in out_dict.items():
@@ -413,24 +415,30 @@ class Task():
         else:
             run_async = self.parameters.get('async',False)
             if self.return_as_function:
-                self.logger.info('{}: Lazy run'.format(self.name))
+                if self.logger is not None:
+                    self.logger.info('{}: Lazy run'.format(self.name))
                 self.parameters['return_as_function'] = False
                 out_dict = self._process_outputs(self.process)
             elif self.return_as_class:
-                self.logger.info('{}: Lazy run'.format(self.name))
+                if self.logger is not None:
+                    self.logger.info('{}: Lazy run'.format(self.name))
                 self.parameters['return_as_class'] = False
                 out_dict = self._process_outputs(self)
             elif (('parallel' not in self.parameters) and ('map_vars' not in self.parameters)):
-                self.logger.info('{}: Running'.format(self.name))
+                if self.logger is not None:
+                    self.logger.info('{}: Running'.format(self.name))
                 out_dict = self._serial_run(run_async=run_async)
             elif 'parallel' in self.parameters and not 'map_vars' in self.parameters:
-                self.logger.info('{}: Running with pool of {} workers'.format(self.name, self.parameters['n_cores']))
+                if self.logger is not None:
+                    self.logger.info('{}: Running with pool of {} workers'.format(self.name, self.parameters['n_cores']))
                 out_dict = self._parallel_run_ray(run_async=run_async)
             elif 'map_vars' in self.parameters and not 'parallel' in self.parameters:
                 if iteration is not None:
-                    self.logger.info('{}: Running iteration {}'.format(self.name, iteration))
+                    if self.logger is not None:
+                        self.logger.info('{}: Running iteration {}'.format(self.name, iteration))
                 else:
-                    self.logger.info('{}: Running multiple iterations'.format(self.name))
+                    if self.logger is not None:
+                        self.logger.info('{}: Running multiple iterations'.format(self.name))
                 out_dict = self._serial_map(iteration=iteration,run_async=run_async)
             else:
                 raise Exception('Mixing !parallel-map and !map in a task is not allowed')
@@ -439,6 +447,8 @@ class Task():
 
 class TaskGraph(Task):
     def __init__(self,parameters,global_parameters=None, name=None, logger=None, simulate=False):
+        if not parameters.get('logging',True):
+            logger = None
         super().__init__(parameters,global_parameters,name,logger)
         #Gather modules:
         self.external_modules = self.parameters.get('modules',[])
@@ -605,7 +615,8 @@ class TaskGraph(Task):
                     task.simulate = True
                     out_dict = task.run()
                 else:
-                    self.logger.info('Skipping {}'.format(task.name))
+                    if self.logger is not None:
+                        self.logger.info('Skipping {}'.format(task.name))
                     outs = [None for out in task.output_names]
                     out_dict = {'{}{}{}'.format(task.name,symbols['dot'],out_name): TaskIO(out_val,task.get_hash(),iotype='data',name=out_name,position=str(i)) for i, (out_name, out_val) in enumerate(zip(task.output_names,outs))}
             else:
@@ -623,7 +634,7 @@ class TaskGraph(Task):
             for k,v in filter_outputs.items():
                 self.output_names.append(k)
                 task_out.append(self.tasks_io[v].load())
-            print('filter outputs')
+                
             return tuple(task_out)
         else:
             #task_out = [self.tasks_io]
