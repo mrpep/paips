@@ -348,8 +348,12 @@ class Task():
             for k, var in zip(map_var_names,iteration):
                 self.parameters[k] = TaskIO(var,self.task_hash,iotype='data',name=k)
 
-            cache_paths = self.find_cache()
-            if self.cache and cache_paths:
+            
+            if self.cache:
+                cache_paths = self.find_cache()
+            else:
+                cache_paths = False
+            if cache_paths:
                 self.logger.info('Caching task {}'.format(self.name))
                 out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=Path(cache_i).parts[-2].split('_')[-1]) for cache_i in cache_paths}
                 for task_name, task in out_dict.items():
@@ -398,14 +402,17 @@ class Task():
         self.task_hash = self.get_hash()
         self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
         self.export_dir = Path(self.global_parameters['output_path'],self.name)
+        
         self.return_as_function = self.parameters.get('return_as_function',False)
         self.return_as_class = self.parameters.get('return_as_class',False)
         if self.logger is not None:
             self.logger.info('{}: Hash {}'.format(self.name,self.task_hash))
         
-        cache_paths = self.find_cache()
-
-        if self.cache and cache_paths:
+        if self.cache:
+            cache_paths = self.find_cache()
+        else:
+            cache_paths = False
+        if cache_paths:
             if self.logger is not None:
                 self.logger.info('{}: Caching'.format(self.name))
 
@@ -459,6 +466,8 @@ class TaskGraph(Task):
         self.load_modules()
         #Build the graph
         self.graph = nx.DiGraph()
+        if self.logger is not None:
+            self.logger.info('Gathering tasks for {}'.format(self.name))
         self.gather_tasks()
         self.connect_tasks()
         #Get tasks execution order
