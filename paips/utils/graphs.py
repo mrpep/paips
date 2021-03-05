@@ -7,6 +7,8 @@ from .config_processors import apply_mods, task_parameters_level_from_path, proc
 from ruamel.yaml import YAML
 import fnmatch
 
+from io import StringIO
+
 
 
 def make_graph_from_tasks(task_nodes):
