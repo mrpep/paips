@@ -48,8 +48,6 @@ def replace_vars(config, global_config, missing_paths):
         else:
             config[path] = global_config[var_to_insert]
 
-
-
 def insert_yaml_value(config,special_tags,global_config,default_config,missing_paths):
     found_paths = config.find_path(symbols['insert_config'],mode='startswith')
     #,action=lambda x: process_config(Config(x.split(symbols['insert_config'])[-1],special_tags=special_tags),special_tags=special_tags,global_config=global_config)
@@ -65,6 +63,7 @@ def insert_yaml_value(config,special_tags,global_config,default_config,missing_p
 
 def include_config(config,special_tags,global_config,default_config,missing_paths):
     found_paths = config.find_keys('include')
+
     for p in found_paths:
         includes = config[p]
         switch = None
@@ -82,12 +81,11 @@ def include_config(config,special_tags,global_config,default_config,missing_path
         for include_config in includes:
             if include_config.get('enable',True) and include_config.get('config',None):               
                 path_yaml_to_include = Path(config.yaml_path.parent,include_config.pop('config'))
+                
                 imported_config = Config(path_yaml_to_include,special_tags=special_tags)
                 if 'defaults' in imported_config:
                     default_config.update(imported_config.pop('defaults'))
                 mods = include_config.get('mods',None)
-                if mods:
-                    raise Exception('Mods not implemented in include')
                 for r,v in include_config.items():
                     r='({})'.format(r)
                     imported_config = replace_in_config(imported_config,r,v)
@@ -96,6 +94,8 @@ def include_config(config,special_tags,global_config,default_config,missing_path
                 else:
                     p_parent = None
                 imported_config = process_config(imported_config,special_tags,global_config,default_config,missing_paths)
+                if mods:
+                    apply_mods(mods,imported_config)
                 if p_parent:
                     p_config = Config(config[p_parent])
                     p_config.yaml_path = config.yaml_path
