@@ -79,7 +79,7 @@ def include_config(config,special_tags,global_config,default_config,missing_path
             includes = filtered_includes
 
         for include_config in includes:
-            if include_config.get('enable',True) and include_config.get('config',None):               
+            if include_config.get('enable',True) and include_config.get('config',None):
                 path_yaml_to_include = Path(config.yaml_path.parent,include_config.pop('config'))
                 
                 imported_config = Config(path_yaml_to_include,special_tags=special_tags)
@@ -118,12 +118,16 @@ def add_missing(dict_to_update, defaults):
         defaults.pop(k)
 
 def process_config(config,special_tags,global_config,default_config,missing_paths):
+    add_missing(global_config,default_config)
+    global_config.update(config.get('global',{}))
+    
     replace_vars(config,global_config, missing_paths)
     global_config.update(config.get('global',{}))
     add_missing(global_config,default_config)
     insert_yaml_value(config, special_tags, global_config, default_config, missing_paths)
     global_config.update(config.get('global',{}))
     add_missing(global_config,default_config)
+
     config = include_config(config,special_tags,global_config,default_config,missing_paths)
 
     return config
