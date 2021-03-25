@@ -28,7 +28,7 @@ def main():
                      'in_memory': False,
                      'cache_path': 'cache',
                      'output_path': args['output_path'],
-                     'cache_compression': 3}
+                     'cache_compression': 0}
 
     paips_logger = logger.get_logger('Paips','logs')
     main_config = load_experiment(args['config_path'], mods=args['mods'],global_config=global_config, logger=paips_logger)
