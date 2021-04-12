@@ -1,0 +1,35 @@
+modules:
+- tasks
+Tasks:
+  ReadCSV:
+    class: CSVToDataframe
+    path: https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv
+    delimiter: ;
+  TrainValTestPartition:
+    class: RandomSplit
+    in: ReadCSV->out
+    splits:
+      train: 0.7
+      validation: 0.1
+      test: 0.2
+  RandomForestRegressor:
+    class: RandomForestRegressor
+    in: TrainValTestPartition->train
+    target_col: quality
+    features_col: null
+    parameters:
+      n_estimators: 100
+      criterion: mse
+      max_depth: null
+      max_features: auto
+  RandomForestPredictVal:
+    class: SklearnModelPredict
+    in: TrainValTestPartition->validation
+    target_col: quality
+    features_col: null
+    model: RandomForestRegressor->out
+  MSEVal:
+    class: MeanSquaredError
+    y_pred: RandomForestPredictVal->predictions
+    y_true: RandomForestPredictVal->targets
+    export: True
