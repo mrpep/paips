@@ -29,6 +29,17 @@ Tasks:
       criterion: mse
       max_depth: null
       max_features: auto
+  RandomForestPredictVal:
+    class: SklearnModelPredict
+    in: TrainValTestPartition->validation
+    target_col: quality
+    features_col: null
+    model: RandomForestRegressor->out
+  MSEVal:
+    class: MeanSquaredError
+    y_pred: RandomForestPredictVal->predictions
+    y_true: RandomForestPredictVal->targets
+    export: True
 ```
 
 So the first step would be to code RandomForestRegressor task by wrapping **sklearn.ensemble.RandomForestRegressor**. We use a regressor because the dataset we are working on has a continous target (wine quality rated from 0 to 10).
@@ -37,16 +48,13 @@ samples/tasks/\_\_init_\_.py
 ```python
 class RandomForestRegressor(Task):
     def process(self):
-        from sklearn.ensemble import RandomForestRegressor as rfr
-        import numpy as np
-
         data = self.parameters.get('in')
         target_col = self.parameters.get('target_col',None)
         features_col = self.parameters.get('features_col',None)
         kwargs = self.parameters.get('parameters',None)
 
         if features_col is None:
-            features_col = list(set(data.columns) - set(target_col))
+            features_col = list(set(data.columns) - set([target_col]))
 
         targets = np.array(data[target_col])
         features = np.array(data[features_col])
@@ -55,6 +63,31 @@ class RandomForestRegressor(Task):
         rf_model.fit(features, targets)
 
         return rf_model
+
+class SklearnModelPredict(Task):
+    def process(self):
+        data = self.parameters.get('in',None)
+        target_col = self.parameters.get('target_col',None)
+        features_col = self.parameters.get('features_col',None)
+        model = self.parameters.get('model',None)
+
+        if features_col is None:
+            features_col = list(set(data.columns) - set([target_col]))
+
+        predictions = model.predict(np.array(data[features_col]))
+        targets = np.array(data[target_col])
+        self.output_names = ['predictions','targets']
+
+        return predictions,targets
+
+class MeanSquaredError(Task):
+    def process(self):
+        from sklearn.metrics import mean_squared_error
+
+        predictions = self.parameters.get('y_pred', None)
+        targets = self.parameters.get('y_true', None)
+
+        return mean_squared_error(targets,predictions)
 ```
 
 
