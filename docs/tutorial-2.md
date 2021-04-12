@@ -1,5 +1,6 @@
-##### Understanding the outputs
+#### Understanding the outputs
 
+##### Logs
 Once we run the previous example, things like these are logged and showed in the terminal:
 
 ```
@@ -16,6 +17,8 @@ Once we run the previous example, things like these are logged and showed in the
 ```
 
 So, we have the time when each task was executed, a unique hash to identify each task, and messages about each task being ran or its output saved.
+
+##### Caching and In Memory
 Some questions arise: Why are all tasks saving outputs? Can we avoid it? Where are those outputs saved?
 
 By default, the output of each task is serialized using **joblib** and saved in the <cache_folder>/<task_hash> directory.
@@ -39,7 +42,15 @@ Now, this gets printed:
 
 Now, ReadCSV and TrainValTestPartition are not 'Running' nor 'Saving outputs'. Welcome to the world of **Cache**
 
-This is what is happening under the hood. Before running the **process()** method of each task, a hash is generated from all the task parameters. Then, before running **process()**, we take a look inside the **cache** folder and see if <cache_folder>/<task_hash> exists. If it exists, instead of running again **process()**, we just load the saved outputs. This is really useful when a task takes a very long time and we don't want to run it again and again. However, some times we might want to regenerate the outputs and avoid caching. In that case, we can deactivate caching for a particular task adding the parameter:
+This is what is happening under the hood. Before running the **process()** method of each task, a hash is generated from all the task parameters. Then, before running **process()**, we take a look inside the **cache** folder and see if <cache_folder>/<task_hash> exists. If it exists, instead of running again **process()**, we just load the saved outputs. This is really useful when a task takes a very long time and we don't want to run it again and again. 
+We can change the default <cache_folder> by adding this to our config:
+
+```yaml
+global:
+  cache_path: <new_cache_folder>
+```
+
+However, some times we might want to regenerate the outputs and avoid caching. In that case, we can deactivate caching for a particular task adding the parameter:
 
 ```yaml
 cache: False
@@ -53,5 +64,13 @@ paiprun configs/ex1.yaml --no-caching
 
 In those cases, the **process()** method is called regardless of if <cache_folder>/<task_hash> exists or not. If it exists, it will be replaced by the new outputs.
 
+Another useful parameter that can be added to any task is:
 
+```yaml
+in_memory: False
+```
+
+This way, the task not only will not be cached, but also, outputs won't be saved in disk and instead will be stored in memory until no other task needs them. This is useful when the tasks don't take too long (to avoid saving unnecessary files), and we want them to run very fast (because saving/loading from disk takes some time).
+
+##### Exports and loading outputs
 
