@@ -23,7 +23,13 @@ Tasks:
     export: True
 ```
 Let's break it into parts:
-First of all, there is a **modules** key. This consists of a list of python modules with tasks. So, in this case, we have a module called tasks which will contain the different tasks that we are going to use in the pipeline. Then, we have the **Tasks** key. It contains all the tasks that are going to be executed. In this configuration file there are 2 tasks which will be executed: ReadCSV and TrainValTestPartition. Notice that both tasks have a **class** key, which tells paips, which class from the modules the task corresponds to. So in this case, the ReadCSV task will instantiate a CSVToDataframe task. We have other keys in the ReadCSV task: path and delimiter. These are **parameters** and will be accessible from inside each class through the parameters dictionary (more on that later...). In this case, ReadCSV will read a csv file and we have to indicate the path of the file, and in this case, as the delimiter is a semicolon, we tell it through the delimiter parameter.
+First of all, there is a **modules** key. This consists of a list of python modules with tasks. So, in this case, we have a module called tasks which will contain the different tasks that we are going to use in the pipeline. 
+
+Then, we have the **Tasks** key. It contains all the tasks that are going to be executed. In this configuration file there are 2 tasks which will be executed: ReadCSV and TrainValTestPartition. 
+
+Notice that both tasks have a **class** key, which tells paips, which class from the modules the task corresponds to. So in this case, the ReadCSV task will instantiate a CSVToDataframe task. 
+
+We have other keys in the ReadCSV task: path and delimiter. These are **parameters** and will be accessible from inside each class through the parameters dictionary (more on that later...). In this case, ReadCSV will read a csv file and we have to indicate the path of the file, and in this case, as the delimiter is a semicolon, we tell it through the delimiter parameter.
 
 Now, let's take a look at the TrainValTestPartition task. It has some new features:
 - the in parameter has a value ReadCSV->out. The **-> symbol** is a very important one. It is used to reference other tasks. In this case, we are telling paips that the in parameter will take the output of the ReadCSV task. By default, task outputs are called out, but we could use other names (more on that later...)
