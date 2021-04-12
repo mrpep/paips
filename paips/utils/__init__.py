@@ -13,7 +13,6 @@ from .cache import *
 from .graphs import *
 from .settings import symbols
 from .diagnose import *
-from .distributed import *
 from .file import *
 
 from kahnfigh import Config

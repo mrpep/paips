@@ -66,7 +66,7 @@ def load_experiment(configs, mods=None, global_config=None, logger=None):
         main_config = process_config(main_config,special_tags,global_config,default_config,missing_paths)
 
     default_cluster_config = {
-        'manager': 'ray',
+        'manager': None,
         'n_cores': 1,
         'niceness': 20
         }

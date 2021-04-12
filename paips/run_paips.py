@@ -34,20 +34,25 @@ def main():
     main_config = load_experiment(args['config_path'], mods=args['mods'],global_config=global_config, logger=paips_logger)
     if 'defaults' in main_config:
         main_config.pop('defaults')
-  
+
+    cluster_manager = None
     if 'cluster_config' in main_config:
         cluster_config = main_config['cluster_config']
         if cluster_config['manager'] == 'ray':
+            cluster_manager = 'ray'
             import ray
             try:
                 ray.init(address= 'auto', log_to_driver=False) #If existing cluster connects to it
             except:
                 ray.init(log_to_driver=False) #Else uses a local cluster
 
+    
+
     main_task = TaskGraph(main_config,global_config,name='MainTask',logger=paips_logger,simulate=args['simulate'])
     main_task.run()
-    
-    ray.shutdown()
+
+    if cluster_manager == 'ray':
+        ray.shutdown()
 
 if __name__ == '__main__':
     try:
