@@ -55,8 +55,8 @@ class TaskIO():
             joblib.dump(self.data,self.address.local_filename,compress=compression_level)
         except Exception as e:
             print(e)
-            from IPython import embed
-            embed()
+        from IPython import embed
+        #embed()
             
 
         self.create_link(self.address.parent,export_path,copy_files=export,symlink_db=symlink_db,overwrite = overwrite_export)
@@ -69,6 +69,7 @@ class TaskIO():
 
     def create_link(self, cache_path, export_path,copy_files=False,symlink_db=None,overwrite=True):
         #Create symbolic link to cache:
+        cache_path = cache_path.absolute()
         source_file = glob.glob(str(cache_path)+'/*')
         for f in source_file:
             destination_path = GenericFile(export_path,Path(f).stem)
@@ -418,7 +419,8 @@ class Task():
 
             out_dict = {'{}{}{}'.format(self.name,symbols['dot'],Path(cache_i).stem): TaskIO(cache_i,self.task_hash,iotype='path',name=Path(cache_i).stem,position=Path(cache_i).parts[-2].split('_')[-1]) for cache_i in cache_paths}
             for task_name, task in out_dict.items():
-                task.create_link(Path(task.data).parent,Path(self.export_path))
+                export = self.parameters.get('export', False)
+                task.create_link(Path(task.data).parent,Path(self.export_path),copy_files=export)
         else:
             run_async = self.parameters.get('async',False)
             if self.return_as_function:
