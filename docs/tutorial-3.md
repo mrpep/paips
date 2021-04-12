@@ -42,7 +42,9 @@ Tasks:
     export: True
 ```
 
-So the first step would be to code RandomForestRegressor task by wrapping **sklearn.ensemble.RandomForestRegressor**. We use a regressor because the dataset we are working on has a continous target (wine quality rated from 0 to 10).
+So, now we have a RandomForestRegressor which trains the random forest model, RandomForestPredictVal which takes the validation data and makes predictions over it and also returns the ground truth values, and MSEVal which calculates the mean squared error between the predicted values and the ground truth in the validation set.
+
+The new tasks are coded in a same fashion as we did previously:
 
 samples/tasks/\_\_init_\_.py
 ```python
@@ -89,5 +91,24 @@ class MeanSquaredError(Task):
 
         return mean_squared_error(targets,predictions)
 ```
+
+So, finally we ran the complete pipeline:
+
+```
+paiprun configs/ex2.yaml --output_path "my_experiments/rf_regressor"
+```
+
+Now, imagine that you want to use 300 trees instead of 100. It would be a bit ugly to copy the whole configuration file and just change the n_estimators parameter. We have a solution: using modifiers.
+
+```
+paiprun configs/ex2.yaml --output_path "my_experiments/rf_regressor_300trees" --mods "Tasks/RandomForestRegressor/parameters/n_estimators=300"
+```
+
+If you want to modify more than one parameter at the same time, no problem:
+```
+paiprun configs/ex2.yaml --output_path "my_experiments/rf_regressor_300trees_depth20" --mods "Tasks/RandomForestRegressor/parameters/n_estimators=300&Tasks/RandomForestRegressor/parameters/max_depth=20"
+```
+
+
 
 
