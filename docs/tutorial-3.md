@@ -98,7 +98,7 @@ So, finally we ran the complete pipeline:
 paiprun configs/ex2.yaml --output_path "my_experiments/rf_regressor"
 ```
 
-Now, imagine that you want to use 300 trees instead of 100. It would be a bit ugly to copy the whole configuration file and just change the n_estimators parameter. We have a solution: using modifiers.
+Now, imagine that you want to use 300 trees instead of 100. It would be a bit ugly to copy the whole configuration file and just change the n_estimators parameter. We have a solution: using **Modifiers**.
 
 ```
 paiprun configs/ex2.yaml --output_path "my_experiments/rf_regressor_300trees" --mods "Tasks/RandomForestRegressor/parameters/n_estimators=300"
@@ -108,6 +108,14 @@ If you want to modify more than one parameter at the same time, no problem:
 ```
 paiprun configs/ex2.yaml --output_path "my_experiments/rf_regressor_300trees_depth20" --mods "Tasks/RandomForestRegressor/parameters/n_estimators=300&Tasks/RandomForestRegressor/parameters/max_depth=20"
 ```
+
+Modifiers are very powerful, but sometimes paths to a parameter can become very long or hard to write. In that case, it is a better idea to use **Variables**
+
+Let's reformulate our configuration file:
+
+configs/ex3.yaml
+
+
 
 
 
