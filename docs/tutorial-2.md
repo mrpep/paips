@@ -115,9 +115,9 @@ In configs you will find:
 
 ```
 ── configs
- ├── MainTask.yaml
- ├── ReadCSV.yaml
- └── TrainValTestPartition.yaml
+   ├── MainTask.yaml
+   ├── ReadCSV.yaml
+   └── TrainValTestPartition.yaml
 ```
 These are configuration files generated from the main configuration file 'ex1.yaml'. They can help you to keep track of what parameters each task received, and when doing configuration files composition (more on that later) it can be helpful for debugging.
 
