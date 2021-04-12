@@ -39,4 +39,19 @@ Now, this gets printed:
 
 Now, ReadCSV and TrainValTestPartition are not 'Running' nor 'Saving outputs'. Welcome to the world of **Cache**
 
+This is what is happening under the hood. Before running the **process()** method of each task, a hash is generated from all the task parameters. Then, before running **process()**, we take a look inside the **cache** folder and see if <cache_folder>/<task_hash> exists. If it exists, instead of running again **process()**, we just load the saved outputs. This is really useful when a task takes a very long time and we don't want to run it again and again. However, some times we might want to regenerate the outputs and avoid caching. In that case, we can deactivate caching for a particular task adding the parameter:
+
+```yaml
+cache: False
+```
+
+or we can deactivate caching for all tasks adding the following argument when calling paiprun:
+
+```
+paiprun configs/ex1.yaml --no-caching
+```
+
+In those cases, the **process()** method is called regardless of if <cache_folder>/<task_hash> exists or not. If it exists, it will be replaced by the new outputs.
+
+
 
