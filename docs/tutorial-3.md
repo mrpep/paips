@@ -31,7 +31,7 @@ Tasks:
       max_features: auto
 ```
 
-So the first step would be to wrap **sklearn.ensemble.RandomForestRegressor** into a Task. We use a regressor because the dataset we are working on has a continous target (wine quality rated from 0 to 10).
+So the first step would be to code RandomForestRegressor task by wrapping **sklearn.ensemble.RandomForestRegressor**. We use a regressor because the dataset we are working on has a continous target (wine quality rated from 0 to 10).
 
 samples/tasks/__init__.py
 ```python
