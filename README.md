@@ -17,14 +17,29 @@ Now, hands on pipelining...
 
 ### Tutorial
 
-```python
-from paips import Task
+##### Building a machine learning pipeline
 
-class Task1(Task):
-  def process(self):
-     #Here it goes the main part
-     return result
+We are going to build a minimalistic machine learning pipeline.
+First of all, we are going to code each of the pipeline blocks, which are the tasks that are going to be executed. We will create a python module 'tasks'.
+In the __init__.py we will write the different needed tasks:
+
+- First we need to read a csv. We will create a task that turns a csv into a pandas DataFrame:
+
+tasks/__init__.py
+```python
+from paips.core import Task
+import pandas as pd
+
+class CSVToDataframe(Task):
+    def process(self):
+        path = self.parameters.get('path',None)
+        delimiter = self.parameters.get('delimiter',',')
+        return pd.read_csv(path,delimiter=delimiter)
 ```
+
+- We will also create a task to randomly split a dataframe into parts with a given proportion. This will allow us to split our dataset into training, validation and test sets:
+
+
 
 
 
