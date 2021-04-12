@@ -17,7 +17,14 @@ Now, hands on pipelining...
 
 ### Tutorial
 
+```python
+from paips import Task
 
+class Task1(Task):
+  def process(self):
+     #Here it goes the main part
+     return result
+```
 
 
 
