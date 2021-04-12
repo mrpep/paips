@@ -12,10 +12,16 @@ and the tasks declared in the configuration file will be executed in the right o
 
 Now, hands on pipelining...
 
-### Installation
+Installing paips is really easy, just run:
+
+```
+pip install paips
+```
+
+Now that paips is installed, take a look at the [Tutorial](docs/tutorial.md) to learn how to make your life easier when building those large and complex pipelines.
 
 
-### Tutorial
+
 
 
 
