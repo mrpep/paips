@@ -35,7 +35,7 @@ setup(
 
     url='',  # Optional
 
-    author='LIAA/HABLA',  # Optional
+    author='Leonardo Pepino',  # Optional
 
     author_email='',  # Optional
 
@@ -50,6 +50,11 @@ setup(
 
     project_urls={  # Optional
     },
+
+    install_requires=['joblib',
+                      'networkx',
+                      'kahnfigh @ git+https://github.com/mrpep/kahnfigh.git',
+                      'swissknife @ git+ssh://git@github.com/mrpep/swissknife.git'],
 
     entry_points={
     'console_scripts': [

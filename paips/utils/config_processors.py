@@ -1,4 +1,4 @@
-from ruamel.yaml import YAML
+from ruamel_yaml import YAML
 from .settings import symbols
 from pathlib import Path
 from kahnfigh import Config

@@ -13,7 +13,7 @@ from pathlib import Path
 import networkx as nx
 from kahnfigh import Config
 from kahnfigh.core import find_path
-from ruamel.yaml import YAML
+from ruamel_yaml import YAML
 import os
 import ray
 from shutil import copyfile

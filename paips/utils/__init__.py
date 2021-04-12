@@ -1,7 +1,7 @@
 import os
 import pickle
 from pathlib import Path
-from ruamel.yaml import YAML
+from ruamel_yaml import YAML
 import importlib
 import sys
 import inspect

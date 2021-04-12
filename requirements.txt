@@ -1,2 +1,6 @@
 ray
 networkx
+joblib
+git+git://github.com:mrpep/kahnfigh.git
+
+
