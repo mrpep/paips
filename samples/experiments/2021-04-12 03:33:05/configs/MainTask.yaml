@@ -1,0 +1,12 @@
+Tasks:
+  ReadCSV: {class: CSVToDataframe, delimiter: ;, path: https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv}
+  TrainValTestPartition:
+    class: RandomSplit
+    export: true
+    in: ReadCSV->out
+    splits: {test: 0.2, train: 0.7, validation: 0.1}
+cluster_config: {manager: ray, n_cores: 1, niceness: 20}
+global: &id001 {cache: true, cache_compression: 0, cache_path: cache, in_memory: false,
+  output_path: experiments/2021-04-12 03:33:05}
+global_config: *id001
+modules: [tasks]

@@ -1,0 +1,4 @@
+class: RandomSplit
+export: true
+in: ReadCSV->out
+splits: {test: 0.2, train: 0.7, validation: 0.1}
