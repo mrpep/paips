@@ -36,6 +36,9 @@ In the __init__.py we will write the different needed tasks:
 
 tasks/\__init__.py
 ```python
+from paips.core import Task
+import pandas as pd
+
 class CSVToDataframe(Task):
     def process(self):
         path = self.parameters.get('path',None)
