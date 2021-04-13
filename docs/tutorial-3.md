@@ -175,3 +175,4 @@ for n in 100 200 300 400 500; do
 paiprun configs/ex3.yaml --output_path "my_experiments/rf_regressor_$ntrees" --mods "global/n_estimators=$n";
 done
 ```
+In the next [section](tutorial-4.md), we will discuss about how to make more complex configuration files from simple ones.
