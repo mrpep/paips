@@ -157,7 +157,21 @@ Tasks:
     y_true: RandomForestPredictVal->targets
     export: True
 ```
+The new thing is the **!var** tag. It tells paips to replace it by the actual value of the variable, which is declared in **global**. So the approach is to write variables in **global** and then insert them using **!var** tags.
 
+Now, mods are easier to write and the things that we want to alter from the config can be separated in the **global** section:
 
+```
+paiprun configs/ex3.yaml --output_path "my_experiments/rf_regressor_300trees_depth20" --mods "global/n_estimators=300&global/max_depth=20"
+```
 
+So, if for example we want to explore the number of trees, we can do a bash script like:
 
+```bash
+#!/bin/bash
+set -x
+
+for n in 100 200 300 400 500; do
+paiprun configs/ex3.yaml --output_path "my_experiments/rf_regressor_$ntrees" --mods "global/n_estimators=$n";
+done
+```
