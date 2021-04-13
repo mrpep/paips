@@ -1,0 +1,4 @@
+n_estimators: !var n_estimators
+criterion: !var criterion
+max_depth: !var max_depth
+max_features: !var max_features

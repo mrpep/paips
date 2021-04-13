@@ -1,0 +1,11 @@
+defaults:
+  n_estimators: 100
+  criterion: mse
+  max_depth: null
+  max_features: auto
+RegressorModel:
+  class: RandomForestRegressor
+  in: (in_task)->train
+  target_col: quality
+  features_col: null
+  parameters: !yaml configs/rf_hyperparameters.yaml

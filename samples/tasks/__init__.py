@@ -1,6 +1,7 @@
 from paips.core import Task
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor as rfr
+from sklearn.ensemble import GradientBoostingRegressor as gbmr
 import numpy as np
 from IPython import embed
 
@@ -46,6 +47,24 @@ class RandomForestRegressor(Task):
         rf_model.fit(features, targets)
 
         return rf_model
+
+class GradientBoostingMachineRegressor(Task):
+    def process(self):
+        data = self.parameters.get('in')
+        target_col = self.parameters.get('target_col',None)
+        features_col = self.parameters.get('features_col',None)
+        kwargs = self.parameters.get('parameters',None)
+
+        if features_col is None:
+            features_col = list(set(data.columns) - set([target_col]))
+
+        targets = np.array(data[target_col])
+        features = np.array(data[features_col])
+
+        gb_model = gbmr(**kwargs)
+        gb_model.fit(features, targets)
+
+        return gb_model
 
 class SklearnModelPredict(Task):
     def process(self):

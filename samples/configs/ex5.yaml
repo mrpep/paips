@@ -1,0 +1,36 @@
+modules:
+- tasks
+global:
+  model: random_forest
+Tasks:
+  ReadCSV:
+    class: CSVToDataframe
+    path: https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv
+    delimiter: ;
+  TrainValTestPartition:
+    class: RandomSplit
+    in: ReadCSV->out
+    splits:
+      train: 0.7
+      validation: 0.1
+      test: 0.2
+  include:
+    switch: !var model
+    configs:
+    - name: random_forest
+      config: rf_model.yaml
+      in_task: TrainValTestPartition
+    - name: gbm
+      config: gbm_model.yaml
+      in_task: TrainValTestPartition
+  RegressorPredictVal:
+    class: SklearnModelPredict
+    in: TrainValTestPartition->validation
+    target_col: quality
+    features_col: null
+    model: RegressorModel->out
+  MSEVal:
+    class: MeanSquaredError
+    y_pred: RegressorPredictVal->predictions
+    y_true: RegressorPredictVal->targets
+    export: True
