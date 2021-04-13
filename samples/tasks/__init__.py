@@ -82,6 +82,7 @@ class SklearnModelPredict(Task):
 
         return predictions,targets
 
+
 class MeanSquaredError(Task):
     def process(self):
         from sklearn.metrics import mean_squared_error
@@ -90,6 +91,35 @@ class MeanSquaredError(Task):
         targets = self.parameters.get('y_true', None)
 
         return mean_squared_error(targets,predictions)
+
+class KFoldGenerator(Task):
+    def process(self):
+        data = self.parameters['in']
+        n_folds = self.parameters['folds']
+        idxs = data.index
+        samples_per_fold = len(idxs)//n_folds
+
+        assigned_idxs = []
+        val_folds = []
+
+        for i in range(n_folds):
+            if i < n_folds - 1:
+                df_i = data.loc[~idxs.isin(assigned_idxs)]
+                df_i = df_i.sample(n=samples_per_fold)
+                assigned_idxs.extend(df_i.index)
+            else:
+                df_i = data.loc[~idxs.isin(assigned_idxs)]
+            val_folds.append(df_i)
+        
+        train_folds = [pd.concat(val_folds[:i] + val_folds[i+1:]) for i in range(n_folds)]
+        self.output_names = ['train','validation']
+        
+        return train_folds, val_folds
+
+class Concatenate(Task):
+    def process(self):
+        data = self.parameters['in']
+        return np.concatenate(data)
 
 
 

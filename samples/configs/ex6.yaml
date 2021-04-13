@@ -1,0 +1,48 @@
+modules:
+- tasks
+global:
+  model: random_forest
+Tasks:
+  ReadCSV:
+    class: CSVToDataframe
+    path: https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv
+    delimiter: ;
+  RandomFolds:
+    class: KFoldGenerator
+    in: ReadCSV->out
+    folds: 5
+  FoldPipeline:
+    class: TaskGraph
+    in:
+      train: !map RandomFolds->train
+      validation: !map RandomFolds->validation
+    outputs:
+      predictions: RegressorPredictFold->predictions
+      targets: RegressorPredictFold->targets
+    Tasks:
+      include:
+        switch: !var model
+        configs:
+        - name: random_forest
+          config: rf_model.yaml
+          in_task: self
+        - name: gbm
+          config: gbm_model.yaml
+          in_task: self
+      RegressorPredictFold:
+        class: SklearnModelPredict
+        in: self->validation
+        target_col: quality
+        features_col: null
+        model: RegressorModel->out
+  ConcatenatePredictions:
+    class: Concatenate
+    in: FoldPipeline->predictions
+  ConcatenateTargets:
+    class: Concatenate
+    in: FoldPipeline->targets
+  MSEVal:
+    class: MeanSquaredError
+    y_pred: ConcatenatePredictions->out
+    y_true: ConcatenateTargets->out
+    export: True
