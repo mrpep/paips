@@ -57,13 +57,12 @@ class RandomSplit(Task):
         splits = self.parameters.get('splits',None)
         idxs = data.index
         splits = {k: int(v*len(idxs)) for k,v in splits.items()}
-        self.output_names = []
+        self.output_names = sorted([k for k in splits])
         outs = []
-        for k, (s_name, s_n) in enumerate(splits.items()):
-            self.output_names.append(s_name)
+        for k,split_name in enumerate(self.output_names):
             df_remaining = data.loc[idxs]
             if k != len(splits) - 1:
-                df_i = df_remaining.sample(n=s_n)
+                df_i = df_remaining.sample(n=splits[split_name])
                 outs.append(df_i)
                 idxs = set(idxs) - set(df_i.index)
             else:
@@ -77,7 +76,7 @@ Then we create our task CSVToDataframe. When we write our own tasks, we have to 
 
 Now, let's take a look at RandomSplit. The template is similar: it inherits from Task, and overrides the process() method. The parameters are read from self.parameters, and then there is some code to do the splitting. But, in this case there is a new concept to be introduced, which we will call **dynamic outputs**.
 
-If you take a close look at the code, you will notice that the task will return 3 outputs in this case, instead of 1 like the CSVToDataframe task. Moreover, if the configuration file is changed, and another split is added, it will return 4 outputs. So, the number of outputs depends of the configuration file definition. Another important thing is that we will need to differentiate those 3 outputs. This is because, for example, we might need to access the train partition from another task. In that case we would do something like: in: TrainValTestPartition->train. Notice that in order to access ReadCSV output we did ReadCSV->out, but in this case we have more outputs: TrainValTestPartition->train, TrainValTestPartition->validation and TrainValTestPartition->test. That output differentiation is done in the code by overwriting the self.output_names list, which by default is ['out']. When the code is executed, the list has ['train', 'validation', 'test'] value. At the same time, the function returns the corresponding dataframes. So, when generating dynamic outputs make sure that the order of the names match the order of the outputs.
+If you take a close look at the code, you will notice that the task will return 3 outputs in this case, instead of 1 like the CSVToDataframe task. Moreover, if the configuration file is changed, and another split is added, it will return 4 outputs. So, the number of outputs depends of the configuration file definition. Another important thing is that we will need to differentiate those 3 outputs. This is because, for example, we might need to access the train partition from another task. In that case we would do something like: in: TrainValTestPartition->train. Notice that in order to access ReadCSV output we did ReadCSV->out, but in this case we have more outputs: TrainValTestPartition->train, TrainValTestPartition->validation and TrainValTestPartition->test. That output differentiation is done in the code by overwriting the self.output_names list, which by default is ['out']. When the code is executed, the list has ['train', 'validation', 'test'] value. At the same time, the function returns the corresponding dataframes. So, when generating dynamic outputs make sure that the order of the names match the order of the outputs. Also, it is important to ensure that if we run the same code with the same parameters multiple times, outputs should always be the same. That is the reason why self.output_names is sorted, as keys in a dictionary do not have a fixed order.
 
 Now, we have the 2 components of every paips pipeline: tasks and a configuration file. To run this example you can open a terminal and go to the samples folder. From there run:
 
