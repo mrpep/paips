@@ -128,6 +128,13 @@ return_as_class: True
 ```
 
 This will make the DataGeneratorPipeline to run in lazy mode. So the output of the task will be the task itself.
+Another option is to do:
+
+```yaml
+return_as_function: True
+```
+
+In this case, the **process()** method will be returned.
 3) Then, create a Generator task, which will do all the common stuff (receive a batch_size parameter, a dataframe with the training data or metadata, etc...), and make it accept the DataGeneratorPipeline task as a parameter. For example:
 
 ```yaml 
