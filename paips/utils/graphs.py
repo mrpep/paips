@@ -1,15 +1,11 @@
 import networkx as nx
 from kahnfigh import Config
-from IPython import embed
 from .settings import symbols
 from kahnfigh.utils import IgnorableTag, merge_configs, replace_in_config
 from .config_processors import apply_mods, task_parameters_level_from_path, process_config
 from ruamel_yaml import YAML
 import fnmatch
-
 from io import StringIO
-
-
 
 def make_graph_from_tasks(task_nodes):
     graph = nx.DiGraph()
@@ -20,7 +16,6 @@ def make_graph_from_tasks(task_nodes):
         if len(dependencies)>0:
             for dependency in dependencies:
                 graph.add_edge(task_nodes[dependency],task)
-                
     return graph
 
 def load_experiment(configs, mods=None, global_config=None, logger=None):
@@ -88,7 +83,7 @@ def load_experiment(configs, mods=None, global_config=None, logger=None):
     parallel_paths_ = {}
 
     for p in parallel_paths_async:
-        main_config[p[0]+'/niceness'] = cluster_config['niceness']
+        main_config[p[0]+'/niceness'] = cluster_config.get('niceness',20)
     for p in parallel_paths:
         path = p[0]+'/parallel'
         if path not in parallel_paths_:

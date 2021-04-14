@@ -15,17 +15,26 @@ from kahnfigh import Config
 from kahnfigh.core import find_path
 from ruamel_yaml import YAML
 import os
-import ray
+
 from shutil import copyfile
 import glob
 import fnmatch
 
 from swissknife.aws import get_instances_info
 
-from IPython import embed
-
 class TaskIO():
+    """
+    A class to store the inputs and outputs for each task.
+    """
     def __init__(self, data, hash_val, iotype = 'data', name = None,position='0'):
+        """
+        data: data to be stored
+        hash_val: hash of the task that generated the data
+        iotype: can be 'data' or 'path' depending on if it already exists and it is saved in disk
+        name: name of the output. It is the name the file will have when saved in cache or exported
+        position: it is used to differentiate multiple outputs of a task. It gets appended to the hash (<hash_val>_<position>)
+        """
+
         self.hash = hash_val
         self.data = data
         self.iotype = iotype
@@ -44,33 +53,37 @@ class TaskIO():
             return GenericFile(self.data).load()
 
     def save(self, cache_path=None, export_path=None, compression_level = 0, export=False,symlink_db=None,overwrite_export=True):
+        """
+        cache_path: it is where the data will be saved
+        export_path: path more accessible and human-readable to store symbolic links to the cache files
+        compression_level: >0 gets compressed, meaning less space in disk but slower access and write times
+        export: if True, instead of having a symlink in the export_path, the cache file will get copied to export_path
+        symlink_db: path to a file that will be created containing information about where each task output is
+        overwrite_export: if export files already exist, they will get overwritten
+        """
         self.address = GenericFile(cache_path,self.hash,self.name)
         if not self.address.parent.exists():
             self.address.parent.mkdir(parents=True)
             
         #Save cache locally:
-        try:
-            if Path(self.address.local_filename).exists():
-                Path(self.address.local_filename).unlink()
-            joblib.dump(self.data,self.address.local_filename,compress=compression_level)
-        except Exception as e:
-            print(e)
-        from IPython import embed
-        #embed()
-            
+        if Path(self.address.local_filename).exists():
+            Path(self.address.local_filename).unlink()
+        joblib.dump(self.data,self.address.local_filename,compress=compression_level)
 
-        self.create_link(self.address.parent,export_path,copy_files=export,symlink_db=symlink_db,overwrite = overwrite_export)
+        #Create symbolic link
+        self.__create_link(self.address.parent,export_path,copy_files=export,symlink_db=symlink_db,overwrite = overwrite_export)
 
         #If S3, also upload it
         if (self.address.filesystem == 's3') and not export:
             self.address.upload_from(self.address.local_filename)
 
+        #Now TaskIO no longer stores data, but a path to the actual data
         return TaskIO(self.address,self.hash,iotype='path',name=self.name,position=None)
 
-    def create_link(self, cache_path, export_path,copy_files=False,symlink_db=None,overwrite=True):
-        #Create symbolic link to cache:
+    def __create_link(self, cache_path, export_path,copy_files=False,symlink_db=None,overwrite=True):
         cache_path = cache_path.absolute()
         source_file = glob.glob(str(cache_path)+'/*')
+        #For each file in cache_path, create symlinks or export
         for f in source_file:
             destination_path = GenericFile(export_path,Path(f).stem)
             if not destination_path.parent.exists():
@@ -78,18 +91,12 @@ class TaskIO():
             if copy_files:
                 # If we want easy access to files, then the real file will be at export path and the symlink in cache
                 if (not destination_path.is_symlink() and not destination_path.exists()) or overwrite:
-                    try:
-                        if Path(destination_path.local_filename).exists():
-                            destination_path.unlink()
-                        copyfile(f,str(destination_path.absolute()))
-                    except Exception as e:
-                        print(e)
-                        from IPython import embed
-                        embed()
+                    if Path(destination_path.local_filename).exists():
+                        destination_path.unlink()
+                    copyfile(f,str(destination_path.absolute()))
                     if destination_path.filesystem == 's3':
                         destination_path.upload_from(str(destination_path.absolute()))
-                    #os.remove(f)
-                    #os.symlink(str(destination_path.absolute()),f)
+
                     if symlink_db is not None:
                         symlink_file = GenericFile(symlink_db)
                         if not Path(symlink_file.local_filename).exists() and symlink_file.exists():
@@ -98,8 +105,8 @@ class TaskIO():
                             fw.write('{} -> {}\n'.format(f,str(destination_path)))
                         if symlink_file.filesystem == 's3':
                             symlink_file.upload_from(str(symlink_file.local_filename))
-                        
             else:
+                #Just create a symlink
                 if not destination_path.is_symlink() and not destination_path.exists():
                     os.symlink(f,str(destination_path.absolute()))
 
@@ -120,7 +127,13 @@ class TaskIO():
 
 class Task():
     def __init__(self, parameters, global_parameters=None, name=None, logger=None, simulate=False):
-
+        """
+        parameters: dictionary with all parameters given to a task
+        global_parameters: dictionary with parameters common to all tasks
+        name: task name
+        logger: task logger
+        simulate: if True, the task won't get executed
+        """
         self.global_parameters = {'cache': True,
                              'cache_path': 'cache',
                              'cache_compression': 0,
@@ -141,7 +154,6 @@ class Task():
 
         self.simulate = simulate
 
-        #self.output_names =    get_delete_param(self.parameters,'output_names',['out'])
         self.output_names = self.parameters.pop('output_names',['out'])
         self.cache = get_delete_param(self.parameters,'cache',self.global_parameters['cache'])
         self.in_memory = get_delete_param(self.parameters,'in_memory',self.global_parameters['in_memory'])
@@ -153,7 +165,7 @@ class Task():
             apply_mods(self.parameters['mods'],Config(self.parameters))
             self.parameters.pop('mods')
 
-        self.make_hash_dict()
+        self.__make_hash_dict()
         self.initial_parameters = copy.deepcopy(self.parameters)
 
         self.export_path = Path(self.global_parameters.get('output_path'),self.name)
@@ -165,23 +177,28 @@ class Task():
         if fname.filesystem == 's3':
             fname.upload_from(fname.local_filename)
 
-    def make_hash_dict(self):
-        self.hash_dict = copy.deepcopy(self.parameters)
+    def __make_hash_dict(self):
+        """
+        Creates a dictionary to hash the task. Parameters that are TaskIOs get replaced by their hash
+        """
+        self._hash_dict = copy.deepcopy(self.parameters)
         #Remove not cacheable parameters
-        if not isinstance(self.hash_dict, Config):
-            self.hash_dict = Config(self.hash_dict)
+        if not isinstance(self._hash_dict, Config):
+            self._hash_dict = Config(self._hash_dict)
         if not isinstance(self.parameters, Config):
             self.parameters = Config(self.parameters)
 
-        _ = self.hash_dict.find_path(symbols['nocache'],mode='startswith',action='remove_value')
+        _ = self._hash_dict.find_path(symbols['nocache'],mode='startswith',action='remove_value')
         _ = self.parameters.find_path(symbols['nocache'],mode='startswith',action='remove_substring')
 
-        for k,v in self.hash_dict.to_shallow().items():
+        for k,v in self._hash_dict.to_shallow().items():
             if isinstance(v,TaskIO):
-                self.hash_dict[k] = self.hash_dict[k].get_hash()
-
+                self._hash_dict[k] = self._hash_dict[k].get_hash()
 
     def search_dependencies(self):
+        """
+        Finds all the tasks needed to run this task. It does it by searching for the -> symbol in its config
+        """
         stop_propagate_dot = self.parameters.get('stop_propagate_dot',None)
         dependency_paths = self.parameters.find_path(symbols['dot'],mode='contains')
         #dependency_paths = [p for p in dependency_paths if 'Tasks' not in ]
@@ -190,17 +207,23 @@ class Task():
         #Esto es porque dienen tambien usa el simbolo -> entonces debo decir que si encuentra ahi no lo tenga en cuenta.
         if stop_propagate_dot:
             dependency_paths = [p for p in dependency_paths if not p.startswith(stop_propagate_dot)]
-        #search_dependencies(self.parameters,self.dependencies)
-        self.dependencies = [self.parameters[path].split(symbols['dot'])[0] for path in dependency_paths]
-        self.dependencies = [d for d in self.dependencies if d != 'self']
 
-        return self.dependencies
+        self._dependencies = [self.parameters[path].split(symbols['dot'])[0] for path in dependency_paths]
+        self._dependencies = [d for d in self._dependencies if d != 'self']
+
+        return self._dependencies
 
     def reset_task_state(self):
+        """
+        Returns the task to its initial parameters and hash_dict
+        """
         self.parameters = copy.deepcopy(self.initial_parameters)
-        self.make_hash_dict()
+        self.__make_hash_dict()
 
-    def check_valid_args(self):
+    def __check_valid_args(self):
+        """
+        Each task can have a valid_args list which lists the allowed parameters
+        """
         for k in self.parameters.keys():
             if k not in self.valid_args:
                 raise Exception('{} not recognized as a valid parameter'.format(k))
@@ -210,24 +233,24 @@ class Task():
         Replace TaskIOs in parameters with the corresponding data. Also adds its associated hashes to the hash dictionary
         """
         glob_keys = self.parameters.find_path('*',mode='contains',action=lambda x: fnmatch.filter(list(data.keys()),x) if '->' in x else x)
-        glob_keys = self.hash_dict.find_path('*',mode='contains',action=lambda x: fnmatch.filter(list(data.keys()),x) if '->' in x else x)
+        glob_keys = self._hash_dict.find_path('*',mode='contains',action=lambda x: fnmatch.filter(list(data.keys()),x) if '->' in x else x)
         
         for k,v in data.items():
-            paths = self.hash_dict.find_path(k,action=lambda x: v.get_hash())
+            paths = self._hash_dict.find_path(k,action=lambda x: v.get_hash())
             if len(paths) > 0:
-                try:
-                    self.parameters.find_path(k,action=lambda x: v.load())
-                except:
-                    embed()
+                self.parameters.find_path(k,action=lambda x: v.load())
             else:
                 if self.simulate and not k.startswith('self'):
                     k_ = k.split('->')[0]+'->'
-                    paths = self.hash_dict.find_path(k_,action=lambda x: v.get_hash(),mode='startswith')
+                    paths = self._hash_dict.find_path(k_,action=lambda x: v.get_hash(),mode='startswith')
 
     def get_hash(self):
+        """
+        Returns an unique identifier for the task
+        """
         task_hash =  self.parameters.get('task_hash',None)
         if task_hash is None:
-            return self.hash_dict.hash()
+            return self._hash_dict.hash()
         else:
             return task_hash
         
@@ -235,11 +258,17 @@ class Task():
         pass
 
     def find_cache(self):
+        """
+        Finds all the associated files in cache
+        """
         cache_paths = find_cache(self.task_hash,self.global_parameters['cache_path'])
         return cache_paths
 
-    def _process_outputs(self,outs):
-        if isinstance(outs,ray._raylet.ObjectRef):
+    def __process_outputs(self,outs):
+        """
+        Task outputs are turned into TaskIOs and saved if in_memory = False. All outputs TaskIO are returned in a dictionary.
+        """
+        if type(outs).__name__ == 'ObjectRef':
             filter_outputs = self.parameters.get('outputs',None)
             if filter_outputs:
                 self.output_names = []
@@ -265,7 +294,10 @@ class Task():
 
         return out_dict
 
-    def _parallel_run_ray(self,run_async = False):
+    def __parallel_run_ray(self,run_async = False):
+        """
+        Initializes a ray pool. Asynchronous pools are still not implemented.
+        """
         from ray.util.multiprocessing.pool import Pool
 
         def set_niceness(niceness): # pool initializer
@@ -278,23 +310,17 @@ class Task():
             out = self.process()
             return out
 
-        if run_async:
-            from IPython import embed
-            #node_settings = self.parameters.get('node',None)
-            #if node_settings:
-            #    instances_info = get_instances_info()
-            #    from IPython import embed
-            #    embed()
-                
-
         iterable_vars = list(zip(*[self.parameters[k] for k in self.parameters['parallel']]))
         n_cores = self.parameters.get('n_cores',4)
         pool = Pool(processes=n_cores, initializer=set_niceness,initargs=(self.parameters.get('niceness',20),),ray_address='auto') #(Run in same host it was called)
         outs = pool.map(worker_wrapper,iterable_vars)
 
-        return self._process_outputs(outs)
+        return self.__process_outputs(outs)
 
-    def _serial_run(self,run_async=False):
+    def __serial_run(self,run_async=False):
+        """
+        Run the task. Can be ran asynchronously using ray, and custom resources can be assigned through 'resources' parameter.
+        """
         if run_async:
             import ray
             import os
@@ -318,9 +344,12 @@ class Task():
                 outs = ray.remote(run_process_async).remote(self)
         else:
             outs = self.process()
-        return self._process_outputs(outs)
+        return self.__process_outputs(outs)
 
-    def _serial_map(self,iteration=None,run_async=False):
+    def __serial_map(self,iteration=None,run_async=False):
+        """
+        Run the task over each input element. Can be ran asynchronously.
+        """
         self.initial_parameters = copy.deepcopy(self.parameters)
         self.original_name = copy.deepcopy(self.name)
         self.original_export_path = copy.deepcopy(self.export_path)
@@ -343,13 +372,12 @@ class Task():
             self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
             self.export_path = Path(self.original_export_path,str(i))
 
-            self.make_hash_dict()
+            self.__make_hash_dict()
             self.task_hash = self.get_hash()
 
             for k, var in zip(map_var_names,iteration):
                 self.parameters[k] = TaskIO(var,self.task_hash,iotype='data',name=k)
 
-            
             if self.cache:
                 cache_paths = self.find_cache()
             else:
@@ -364,7 +392,7 @@ class Task():
                        '{}->output_names'.format(self.name): TaskIO(self.output_names,self.get_hash(),iotype='data',name='output_names',position='1')})
                 self.output_names = ['ray_reference','output_names']
             else:
-                outs.append(self._serial_run(run_async=run_async))
+                outs.append(self.__serial_run(run_async=run_async))
             print('serial map')
 
         #Restore original parameters
@@ -372,10 +400,9 @@ class Task():
         self.name = copy.deepcopy(self.original_name)
         self.export_path = Path(self.original_export_path,'merged')
 
-        self.make_hash_dict()
+        self.__make_hash_dict()
         self.task_hash = self.get_hash()
 
-        #To Do: Merge outputs of map
         merge_map = {}
         for iter in outs:
             for k,v in iter.items():
@@ -385,21 +412,14 @@ class Task():
                     merge_map[k].extend([v])
 
         outs = tuple([[r.load() for r in merge_map['{}->{}'.format(self.name,name)]] for name in self.output_names])
-
-        #ray_out = []
-        #for v in merge_map.values():
-        #    if isinstance(v[0].load(),ray._raylet.ObjectRef):
-        #        ray_out.append(v[0].load())
-
-        #if len(ray_out)>0:
-        #    outs = tuple([ray_out for name in self.output_names])
-        #else:
-        #    outs = tuple([[r.load() for r in merge_map['{}->{}'.format(self.name,name)]] for name in self.output_names])
         
-        return self._process_outputs(outs)
+        return self.__process_outputs(outs)
 
     def run(self, iteration=None):
-        #self.make_hash_dict()
+        """
+        The task is ran. If it is doing a map over the inputs, then iteration is given.
+        Handles the different behaviours like return_as_class/function, map and parallel.
+        """
         self.task_hash = self.get_hash()
         self.cache_dir = Path(self.global_parameters['cache_path'],self.task_hash)
         self.export_dir = Path(self.global_parameters['output_path'],self.name)
@@ -427,20 +447,20 @@ class Task():
                 if self.logger is not None:
                     self.logger.info('{}: Lazy run'.format(self.name))
                 self.parameters['return_as_function'] = False
-                out_dict = self._process_outputs(self.process)
+                out_dict = self.__process_outputs(self.process)
             elif self.return_as_class:
                 if self.logger is not None:
                     self.logger.info('{}: Lazy run'.format(self.name))
                 self.parameters['return_as_class'] = False
-                out_dict = self._process_outputs(self)
+                out_dict = self.__process_outputs(self)
             elif (('parallel' not in self.parameters) and ('map_vars' not in self.parameters)):
                 if self.logger is not None:
                     self.logger.info('{}: Running'.format(self.name))
-                out_dict = self._serial_run(run_async=run_async)
+                out_dict = self.__serial_run(run_async=run_async)
             elif 'parallel' in self.parameters and not 'map_vars' in self.parameters:
                 if self.logger is not None:
                     self.logger.info('{}: Running with pool of {} workers'.format(self.name, self.parameters['n_cores']))
-                out_dict = self._parallel_run_ray(run_async=run_async)
+                out_dict = self.__parallel_run_ray(run_async=run_async)
             elif 'map_vars' in self.parameters and not 'parallel' in self.parameters:
                 if iteration is not None:
                     if self.logger is not None:
@@ -448,56 +468,59 @@ class Task():
                 else:
                     if self.logger is not None:
                         self.logger.info('{}: Running multiple iterations'.format(self.name))
-                out_dict = self._serial_map(iteration=iteration,run_async=run_async)
+                out_dict = self.__serial_map(iteration=iteration,run_async=run_async)
             else:
                 raise Exception('Mixing !parallel-map and !map in a task is not allowed')
 
         return out_dict
 
 class TaskGraph(Task):
+    """
+    This is the most important Task, which executes the pipeline. It can be included inside another pipeline (nested pipelines)
+    """
     def __init__(self,parameters,global_parameters=None, name=None, logger=None, simulate=False):
+        """
+        args have the same meaning as in Task
+        """
         if not parameters.get('logging',True):
             logger = None
         super().__init__(parameters,global_parameters,name,logger)
         #Gather modules:
-        self.external_modules = self.parameters.get('modules',[])
-        self.external_modules = self.external_modules + self.global_parameters.get('modules',[])
+        self._external_modules = self.parameters.get('modules',[])
+        self._external_modules = self._external_modules + self.global_parameters.get('modules',[])
         self.target = self.parameters.get('target',None)
         self.simulate = simulate
 
-        self.load_modules()
+        self.__load_modules()
         #Build the graph
-        self.graph = nx.DiGraph()
+        self._graph = nx.DiGraph()
         if self.logger is not None:
             self.logger.info('Gathering tasks for {}'.format(self.name))
-        self.gather_tasks()
-        self.connect_tasks()
+        self.__gather_tasks()
+        self.__connect_tasks()
         #Get tasks execution order
-        self.get_dependency_order()
+        self.__get_dependency_order()
 
     def send_dependency_data(self,data,ignore_map=False):
         #Override task method so that in this case, data keeps being a TaskIO
         glob_keys = self.parameters.find_path('*',mode='contains',action=lambda x: fnmatch.filter(list(data.keys()),x) if '->' in x else x)
-        glob_keys = self.hash_dict.find_path('*',mode='contains',action=lambda x: fnmatch.filter(list(data.keys()),x) if '->' in x else x)
+        glob_keys = self._hash_dict.find_path('*',mode='contains',action=lambda x: fnmatch.filter(list(data.keys()),x) if '->' in x else x)
 
         for k,v in data.items():
-            paths = self.hash_dict.find_path(k,action=lambda x: v.get_hash())
+            paths = self._hash_dict.find_path(k,action=lambda x: v.get_hash())
             if len(paths) > 0:
                 self.parameters.find_path(k,action=lambda x: v)
 
-    def load_modules(self):
-        self.task_modules = get_modules(self.external_modules)
+    def __load_modules(self):
+        self.task_modules = get_modules(self._external_modules)
 
-    def gather_tasks(self):
+    def __gather_tasks(self):
         """
         Here, all the tasks in config are instantiated and added as nodes to a nx graph
         """
-        self.task_nodes = {}
+        self._task_nodes = {}
         for task_name, task_config in self.parameters['Tasks'].items():
-            try:
-                task_class = task_config['class']
-            except:
-                embed()
+            task_class = task_config['class']
             if task_class == 'TaskGraph':
                 task_obj = TaskGraph
                 task_modules = task_config.get('modules',None)
@@ -511,37 +534,33 @@ class TaskGraph(Task):
                     raise Exception('{} found in multiple task modules. Rename the task in your module to avoid name collisions'.format(task_class))
                 task_obj = task_obj[0]
 
-            #run_async = task_config.get('async',False)
-            #if run_async:
-            #task_instance = ActorWrapper(copy.deepcopy(task_config),self.global_parameters,task_name,self.logger,actor = task_obj)
-            #else:
             task_instance = task_obj(copy.deepcopy(task_config),self.global_parameters,task_name,self.logger)
             
-            self.task_nodes[task_name] = task_instance
+            self._task_nodes[task_name] = task_instance
 
-    def connect_tasks(self):
+    def __connect_tasks(self):
         """
         Here, edges are created using the dependencies variable from each task
         """
-        self.graph = make_graph_from_tasks(self.task_nodes)
+        self._graph = make_graph_from_tasks(self._task_nodes)
 
-    def get_dependency_order(self):
+    def __get_dependency_order(self):
         """
         Use topological sort to get the order of execution. If a target task is specified, find the shortest path.
         """
-        if len(self.graph.nodes) == 0 and len(self.task_nodes)>0:
-            self.dependency_order = [task for task_name, task in self.task_nodes.items()]
+        if len(self._graph.nodes) == 0 and len(self._task_nodes)>0:
+            self._dependency_order = [task for task_name, task in self._task_nodes.items()]
         else:
-            self.dependency_order = list(nx.topological_sort(self.graph))
+            self._dependency_order = list(nx.topological_sort(self._graph))
 
         if self.target:
             #Si tengo que ejecutar el DAG hasta cierto nodo, primero me fijo que nodo es:
-            target_node = [node for node in self.dependency_order if node.name == self.target][0]
-            target_idx = self.dependency_order.index(target_node)
+            target_node = [node for node in self._dependency_order if node.name == self.target][0]
+            target_idx = self._dependency_order.index(target_node)
             #Despues trunco la lista hasta el nodo, con esto estaria sacando todas las tareas que se iban a ejecutar despues:
-            self.dependency_order = self.dependency_order[:target_idx+1]
+            self._dependency_order = self._dependency_order[:target_idx+1]
             #Con esto puedo armar otro grafo que solo contenga los nodos que se iban a ejecutar antes que target.
-            reduced_task_nodes = {node.name: node for node in self.dependency_order}
+            reduced_task_nodes = {node.name: node for node in self._dependency_order}
             pruned_graph = make_graph_from_tasks(reduced_task_nodes)
             #Es posible que algunas tareas se ejecutaran antes que target pero que no fueran necesarias para target sino que para un nodo posterior.
             #Estas tareas quedarian desconectadas del target. Busco los subgrafos conectados:
@@ -555,26 +574,28 @@ class TaskGraph(Task):
             reduced_task_nodes = {node.name: node for node in reachable_subgraph.nodes}
             pruned_graph = make_graph_from_tasks(reduced_task_nodes)
             #Topological sort del grafo resultante me da las dependencias para el target task:
-            self.dependency_order = list(nx.topological_sort(pruned_graph))
-            self.graph = pruned_graph
+            self._dependency_order = list(nx.topological_sort(pruned_graph))
+            self._graph = pruned_graph
 
-        priority_nodes = [node for node in self.graph.nodes if 'priorize' in node.parameters and node.parameters['priorize']]
+        priority_nodes = [node for node in self._graph.nodes if 'priorize' in node.parameters and node.parameters['priorize']]
         
         if len(priority_nodes)>0:
+            #This can be improved, instead of searching all topological_sorts, we could just use one and keep track of all the
+            #tasks that can be executed at any moment. If one of those tasks has priorize, then run it first.
             import itertools
-            all_sorts = [top for top in itertools.islice(nx.all_topological_sorts(self.graph),100)]
+            all_sorts = [top for top in itertools.islice(nx.all_topological_sorts(self._graph),100)]
             sort_score = np.array([sum([top.index(pnode) for pnode in priority_nodes]) for top in all_sorts])
             best_sort = all_sorts[np.argmin(sort_score)]
 
-            self.dependency_order = best_sort
+            self._dependency_order = best_sort
 
-        for node in self.graph.nodes:
+        for node in self._graph.nodes:
             if node.parameters.get('run_first',False):
-                self.dependency_order.remove(node)
-                self.dependency_order.insert(0,node)
+                self._dependency_order.remove(node)
+                self._dependency_order.insert(0,node)
 
-    def _clear_tasksio_not_needed(self, remaining_tasks):
-        needed_tasks = [list(self.graph.predecessors(node)) for node in self.graph.nodes if node.name in remaining_tasks]
+    def __clear_tasksio_not_needed(self, remaining_tasks):
+        needed_tasks = [list(self._graph.predecessors(node)) for node in self._graph.nodes if node.name in remaining_tasks]
         needed_tasks = [task.name for predecessors in needed_tasks for task in predecessors]
 
         tasks_io = copy.deepcopy(self.tasks_io)
@@ -584,13 +605,13 @@ class TaskGraph(Task):
                 self.tasks_io.pop(io_name)
 
     def process(self,params=None):
-        if params is not None:
-            self.parameters.update(params)
         """
         Runs each task in order, gather outputs and inputs.
         """
 
-        remaining_tasks = [task.name for task in self.dependency_order]
+        if params is not None:
+            self.parameters.update(params)
+        remaining_tasks = [task.name for task in self._dependency_order]
         run_from = self.parameters.get('run_from',None)
         also_run = self.parameters.get('also_run',None)
         if run_from:
@@ -609,9 +630,8 @@ class TaskGraph(Task):
         if inputs:
             for k,v in inputs.items():
                 self.tasks_io['self->{}'.format(k)] = v
-            #self.send_dependency_data(self.tasks_io,ignore_map=True)
-        for task in self.dependency_order:
-            
+
+        for task in self._dependency_order:
             task.reset_task_state()
             
             if 'iter' in self.parameters:
@@ -635,7 +655,6 @@ class TaskGraph(Task):
 
             self.tasks_io.update(out_dict)
             remaining_tasks.remove(task.name)
-            #self._clear_tasksio_not_needed(remaining_tasks)
 
         filter_outputs = self.parameters.get('outputs',None)
         task_out = []
@@ -644,24 +663,20 @@ class TaskGraph(Task):
             self.output_names = []
             for k,v in filter_outputs.items():
                 self.output_names.append(k)
-                task_out.append(self.tasks_io[v].load())
-                
+                task_out.append(self.tasks_io[v].load())           
             return tuple(task_out)
         else:
-            #task_out = [self.tasks_io]
             return {}
 
     def __getstate__(self):
         if 'task_modules' in self.__dict__:
             del self.__dict__['task_modules']
-
         return self.__dict__
 
     def __setstate__(self,d):
         if 'external_modules' in d:
             task_modules = get_modules(d['external_modules'])
             d['task_modules'] = task_modules
-
         self.__dict__ = d
     
 
