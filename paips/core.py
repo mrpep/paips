@@ -71,7 +71,7 @@ class TaskIO():
         joblib.dump(self.data,self.address.local_filename,compress=compression_level)
 
         #Create symbolic link
-        self.__create_link(self.address.parent,export_path,copy_files=export,symlink_db=symlink_db,overwrite = overwrite_export)
+        self.create_link(self.address.parent,export_path,copy_files=export,symlink_db=symlink_db,overwrite = overwrite_export)
 
         #If S3, also upload it
         if (self.address.filesystem == 's3') and not export:
@@ -80,7 +80,7 @@ class TaskIO():
         #Now TaskIO no longer stores data, but a path to the actual data
         return TaskIO(self.address,self.hash,iotype='path',name=self.name,position=None)
 
-    def __create_link(self, cache_path, export_path,copy_files=False,symlink_db=None,overwrite=True):
+    def create_link(self, cache_path, export_path,copy_files=False,symlink_db=None,overwrite=True):
         cache_path = cache_path.absolute()
         source_file = glob.glob(str(cache_path)+'/*')
         #For each file in cache_path, create symlinks or export
