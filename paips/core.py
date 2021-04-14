@@ -1,6 +1,6 @@
 from .utils.config_processors import (get_delete_param, apply_mods)
 from .utils.nested import (search_replace, search_dependencies)
-from .utils.cache import (make_hash, find_cache)
+from .utils.cache import find_cache
 from .utils.graphs import make_graph_from_tasks
 from .utils.modiuls import (get_modules, get_classes_in_module)
 from .utils.file import GenericFile
