@@ -46,8 +46,6 @@ def main():
             except:
                 ray.init(log_to_driver=False) #Else uses a local cluster
 
-    
-
     main_task = TaskGraph(main_config,global_config,name='MainTask',logger=paips_logger,simulate=args['simulate'])
     main_task.run()
 
