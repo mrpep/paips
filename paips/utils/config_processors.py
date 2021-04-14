@@ -54,7 +54,7 @@ def insert_yaml_value(config,special_tags,global_config,default_config,missing_p
     for path in found_paths:
         tag_data = config[path]
         insert_yaml_path = tag_data.split(symbols['insert_config'])[-1]
-        insert_config = Config(insert_yaml_path,special_tags=special_tags)
+        insert_config = Config(insert_yaml_path,yaml_tags=special_tags)
         global_config.update(insert_config.get('global',{}))
         if 'defaults' in insert_config:
             default_config.update(insert_config.pop('defaults'))
@@ -82,7 +82,7 @@ def include_config(config,special_tags,global_config,default_config,missing_path
             if include_config.get('enable',True) and include_config.get('config',None):
                 path_yaml_to_include = Path(config.yaml_path.parent,include_config.pop('config'))
                 
-                imported_config = Config(path_yaml_to_include,special_tags=special_tags)
+                imported_config = Config(path_yaml_to_include,yaml_tags=special_tags)
                 if 'defaults' in imported_config:
                     default_config.update(imported_config.pop('defaults'))
                 mods = include_config.get('mods',None)

@@ -26,7 +26,7 @@ def load_experiment(configs, mods=None, global_config=None, logger=None):
     ignorable_tags = [v.strip() for k,v in symbols.items() if v.startswith('!')]
     special_tags = [IgnorableTag(tag) for tag in ignorable_tags]
 
-    configs = [Config(path_i, special_tags = special_tags) for path_i in configs]
+    configs = [Config(path_i, yaml_tags = special_tags) for path_i in configs]
     #main_config = merge_configs(configs)
     main_config = configs[0]
     apply_mods(mods, main_config)
