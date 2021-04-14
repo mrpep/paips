@@ -18,6 +18,101 @@ Let's see the final configuration file and then analyze it:
 samples/configs/ex6.yaml
 
 ```yaml
+modules:
+- tasks
+global:
+  model: random_forest
+Tasks:
+  ReadCSV:
+    class: CSVToDataframe
+    path: https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv
+    delimiter: ;
+  RandomFolds:
+    class: KFoldGenerator
+    in: ReadCSV->out
+    folds: 5
+  FoldPipeline:
+    class: TaskGraph
+    in:
+      train: !map RandomFolds->train
+      validation: !map RandomFolds->validation
+    outputs:
+      predictions: RegressorPredictFold->predictions
+      targets: RegressorPredictFold->targets
+    Tasks:
+      include:
+        switch: !var model
+        configs:
+        - name: random_forest
+          config: rf_model.yaml
+          in_task: self
+        - name: gbm
+          config: gbm_model.yaml
+          in_task: self
+      RegressorPredictFold:
+        class: SklearnModelPredict
+        in: self->validation
+        target_col: quality
+        features_col: null
+        model: RegressorModel->out
+  ConcatenatePredictions:
+    class: Concatenate
+    in: FoldPipeline->predictions
+  ConcatenateTargets:
+    class: Concatenate
+    in: FoldPipeline->targets
+  MSEVal:
+    class: MeanSquaredError
+    y_pred: ConcatenatePredictions->out
+    y_true: ConcatenateTargets->out
+    export: True
 ```
+
+The first task, ReadCSV is the same as before. Then, we have RandomFolds, which is from a new class KFoldGenerator:
+
+```python
+class KFoldGenerator(Task):
+    def process(self):
+        data = self.parameters['in']
+        n_folds = self.parameters['folds']
+        idxs = data.index
+        samples_per_fold = len(idxs)//n_folds
+
+        assigned_idxs = []
+        val_folds = []
+
+        for i in range(n_folds):
+            if i < n_folds - 1:
+                df_i = data.loc[~idxs.isin(assigned_idxs)]
+                df_i = df_i.sample(n=samples_per_fold)
+                assigned_idxs.extend(df_i.index)
+            else:
+                df_i = data.loc[~idxs.isin(assigned_idxs)]
+            val_folds.append(df_i)
+        
+        train_folds = [pd.concat(val_folds[:i] + val_folds[i+1:]) for i in range(n_folds)]
+        self.output_names = ['train','validation']
+        
+        return train_folds, val_folds
+```
+
+This task, basically takes as input the dataset dataframe, and returns all the training and validation folds. These outputs are lists with 5 different dataframes, each with training/validation dataframes for each fold.
+
+Then, we have FoldPipeline, which is the pipeline inside the pipeline. It takes inputs as any other task. These inputs are the training and validation dataframes, but there is a yaml tag **!map**. This makes the whole task to be applied to each of the elements of that input. So, in this case the inputs are lists of 5 dataframes. When using !map, the task, which is a pipeline, is applied to each of the dataframes. 
+
+Then, the pipeline has outputs, which are outputs of tasks inside the pipeline. Basically, the task will export those outputs from the whole pipeline. In this case, we want to know what was predicted and what were the ground truth values for each fold. These two outputs will allow us to calculate metrics.
+
+The pipeline has Tasks, as our main pipeline. This pipeline trains the model and makes predictions as before. Notice the use of **self** to reference the elements that are input to the pipeline itself.
+
+Once the FoldPipeline is executed 5 times, it will generate 5 outputs (a list of 5 predictions, and a list of 5 targets). So, we need to combine the 5 outputs to get predictions and targets for the full dataset. We create a very simple task Concatenate which does the work:
+
+```python
+class Concatenate(Task):
+    def process(self):
+        data = self.parameters['in']
+        return np.concatenate(data)
+```
+
+Then, the MSEVal task will receive 2 arrays with all the predictions and targets merged. And that's all about nested pipelines.
 
 
