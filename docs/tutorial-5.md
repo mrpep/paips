@@ -123,12 +123,16 @@ One example is when training a neural network and doing data augmentation. In th
 1) First create a TaskGraph task (a nested pipeline), which has all the mentioned tasks (tasks that load images, rotates them, blurs them, etc...). We will call it DataGeneratorPipeline.
 2) Then, add to that task the parameter:
 
-```yaml return_as_class: True```
+```yaml 
+return_as_class: True
+```
 
 This will make the DataGeneratorPipeline to run in lazy mode. So the output of the task will be the task itself.
 3) Then, create a Generator task, which will do all the common stuff (receive a batch_size parameter, a dataframe with the training data or metadata, etc...), and make it accept the DataGeneratorPipeline task as a parameter. For example:
 
-```yaml batch_process_task: DataGeneratorPipeline->out```
+```yaml 
+batch_process_task: DataGeneratorPipeline->out
+```
 
 4) Finally, in the function called by the Generator at each training step, the batch_process_task task (in this case DataGeneratorPipeline), will get executed by calling its **process()** method.
 
