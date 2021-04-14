@@ -17,13 +17,12 @@ class RandomSplit(Task):
         splits = self.parameters.get('splits',None)
         idxs = data.index
         splits = {k: int(v*len(idxs)) for k,v in splits.items()}
-        self.output_names = []
+        self.output_names = sorted([k for k in splits])
         outs = []
-        for k, (s_name, s_n) in enumerate(splits.items()):
-            self.output_names.append(s_name)
+        for k,split_name in enumerate(self.output_names):
             df_remaining = data.loc[idxs]
             if k != len(splits) - 1:
-                df_i = df_remaining.sample(n=s_n)
+                df_i = df_remaining.sample(n=splits[split_name])
                 outs.append(df_i)
                 idxs = set(idxs) - set(df_i.index)
             else:
