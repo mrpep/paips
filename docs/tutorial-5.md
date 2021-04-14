@@ -115,4 +115,19 @@ class Concatenate(Task):
 
 Then, the MSEVal task will receive 2 arrays with all the predictions and targets merged. And that's all about nested pipelines.
 
+##### Lazy execution
+
+Sometimes, you might want a task to not execute, but instead to be returned as a task to then be executed at another point of the pipeline.
+One example is when training a neural network and doing data augmentation. In that case, you might have a generator, which loads a batch of data from disk to memory (for example, images). Then does some normalization, creates new images by rotating them, adding noise, blurring, etc... And finally, the resulting tensor is fed to the neural network. A nice thing about paips is that you can do all of this easily:
+
+1) First create a TaskGraph task (a nested pipeline), which has all the mentioned tasks (tasks that load images, rotates them, blurs them, etc...). We will call it DataGeneratorPipeline.
+2) Then, add to that task the parameter:
+```yaml return_as_class: True```
+This will make the DataGeneratorPipeline to run in lazy mode. So the output of the task will be the task itself.
+3) Then, create a Generator task, which will do all the common stuff (receive a batch_size parameter, a dataframe with the training data or metadata, etc...), and make it accept the DataGeneratorPipeline task as a parameter. For example:
+```yaml batch_process_task: DataGeneratorPipeline->out```
+4) Finally, in the function called by the Generator at each training step, the batch_process_task task (in this case DataGeneratorPipeline), will get executed by calling its **process()** method.
+
+A full example can be seen at https://github.com/habla-liaa/ser-with-w2v2
+
 
