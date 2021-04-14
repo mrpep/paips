@@ -2,7 +2,7 @@ import glob
 import hashlib
 import json
 from pathlib import Path
-from swissknife.aws import S3File
+from pyknife.aws import S3File
 
 def find_cache(hash_val,cache_path):
 	if cache_path.startswith('s3://'):

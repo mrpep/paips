@@ -1,4 +1,4 @@
-from swissknife.aws import S3File
+from pyknife.aws import S3File
 from pathlib import Path
 import joblib
 

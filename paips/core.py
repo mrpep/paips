@@ -20,7 +20,7 @@ from shutil import copyfile
 import glob
 import fnmatch
 
-from swissknife.aws import get_instances_info
+from pyknife.aws import get_instances_info
 
 class TaskIO():
     """
