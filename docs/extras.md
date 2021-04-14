@@ -10,3 +10,9 @@ which takes task A output:
 ```yaml
 run_after: TaskA->out
 ```
+
+Sometimes, there might be more than one task that can be executed at any time. Maybe we want in that case that a task runs first than others, because we want to get those results earlier. In that case we can add a priorize parameter:
+
+```yaml
+priorize: True
+```
