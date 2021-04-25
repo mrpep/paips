@@ -388,7 +388,7 @@ class Task():
                 for task_name, task in out_dict.items():
                     task.create_link(Path(task.data).parent,Path(self.export_path))
             elif run_async:
-                outs.append({'{}->ray_reference'.format(self.name): list(self._serial_run(run_async=run_async).values())[0],
+                outs.append({'{}->ray_reference'.format(self.name): list(self.__serial_run(run_async=run_async).values())[0],
                        '{}->output_names'.format(self.name): TaskIO(self.output_names,self.get_hash(),iotype='data',name='output_names',position='1')})
                 self.output_names = ['ray_reference','output_names']
             else:
