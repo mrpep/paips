@@ -20,6 +20,8 @@ from shutil import copyfile
 import glob
 import fnmatch
 
+import time
+
 from pyknife.aws import get_instances_info
 
 class TaskIO():
@@ -651,7 +653,9 @@ class TaskGraph(Task):
                     outs = [None for out in task.output_names]
                     out_dict = {'{}{}{}'.format(task.name,symbols['dot'],out_name): TaskIO(out_val,task.get_hash(),iotype='data',name=out_name,position=str(i)) for i, (out_name, out_val) in enumerate(zip(task.output_names,outs))}
             else:
+                start_time = time.time()
                 out_dict = task.run()
+                self.logger.info('Elapsed {:.4f} seconds.'.format(time.time() - start_time))
 
             self.tasks_io.update(out_dict)
             remaining_tasks.remove(task.name)
