@@ -655,7 +655,8 @@ class TaskGraph(Task):
             else:
                 start_time = time.time()
                 out_dict = task.run()
-                self.logger.info('Elapsed {:.4f} seconds.'.format(time.time() - start_time))
+                if self.logger is not None:
+                    self.logger.info('Elapsed {:.4f} seconds.'.format(time.time() - start_time))
 
             self.tasks_io.update(out_dict)
             remaining_tasks.remove(task.name)
