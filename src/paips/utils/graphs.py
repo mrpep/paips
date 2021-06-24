@@ -3,7 +3,7 @@ from kahnfigh import Config
 from .settings import symbols
 from kahnfigh.utils import IgnorableTag, merge_configs, replace_in_config
 from .config_processors import apply_mods, task_parameters_level_from_path, process_config
-from ruamel_yaml import YAML
+from ruamel.yaml import YAML
 import fnmatch
 from io import StringIO
 
@@ -15,7 +15,10 @@ def make_graph_from_tasks(task_nodes):
         dependencies = [d_i if isinstance(d,list) else d for d in dependencies for d_i in d]
         if len(dependencies)>0:
             for dependency in dependencies:
-                graph.add_edge(task_nodes[dependency],task)
+                try:
+                    graph.add_edge(task_nodes[dependency],task)
+                except Exception as e:
+                    print(str(e) + "\nCouldn't connect task {} with {}".format(task_name,dependency))
     return graph
 
 def load_experiment(configs, mods=None, global_config=None, logger=None):
@@ -93,7 +96,7 @@ def load_experiment(configs, mods=None, global_config=None, logger=None):
         if 'n_cores' not in main_config[p[0]]:
             main_config[p[0]+'/n_cores'] = cluster_config['n_cores']
         if 'niceness' not in main_config[p[0]]:
-            main_config[p[0]+'/niceness'] = cluster_config['niceness']
+            main_config[p[0]+'/niceness'] = cluster_config.get('niceness',20)
 
     map_paths = main_config.find_path(symbols['serial-map'],mode='startswith',action='remove_substring')
     map_paths = [(task_parameters_level_from_path(p),p.split(task_parameters_level_from_path(p) + '/')[-1]) for p in map_paths]
