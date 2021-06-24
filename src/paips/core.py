@@ -13,7 +13,7 @@ from pathlib import Path
 import networkx as nx
 from kahnfigh import Config
 from kahnfigh.core import find_path
-from ruamel_yaml import YAML
+from ruamel.yaml import YAML
 import os
 
 from shutil import copyfile
@@ -522,7 +522,10 @@ class TaskGraph(Task):
         """
         self._task_nodes = {}
         for task_name, task_config in self.parameters['Tasks'].items():
-            task_class = task_config['class']
+            if 'class' in task_config:
+                task_class = task_config['class']
+            else:
+                raise Exception('class parameter missing in task {}'.format(task_name))
             if task_class == 'TaskGraph':
                 task_obj = TaskGraph
                 task_modules = task_config.get('modules',None)
