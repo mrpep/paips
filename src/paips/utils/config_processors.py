@@ -143,7 +143,6 @@ def task_parameters_level_from_path(path):
     return parent_path
 
 def apply_mods(modstr,config):
-    
     yaml = YAML()
     if modstr is not None:
         if isinstance(modstr,str):

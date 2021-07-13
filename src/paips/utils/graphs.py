@@ -78,9 +78,11 @@ def load_experiment(configs, mods=None, global_config=None, logger=None):
     #of the loopable params, and adds a '!nocache' so that it is not cached
 
     parallel_paths = main_config.find_path(symbols['distributed-pool'],mode='startswith',action='remove_substring') 
+    parallel_paths = [p for p in parallel_paths if not p.startswith('global')]
     parallel_paths = [(task_parameters_level_from_path(p),p.split(task_parameters_level_from_path(p) + '/')[-1]) for p in parallel_paths]
     
     parallel_paths_async = [k for k in list(main_config.all_paths()) if k.endswith('async') and main_config[k] == True]
+    parallel_paths_async = [p for p in parallel_paths_async if not p.startswith('global')]
     parallel_paths_async = [(task_parameters_level_from_path(p),p.split(task_parameters_level_from_path(p) + '/')[-1]) for p in parallel_paths_async]
 
     parallel_paths_ = {}
@@ -99,6 +101,7 @@ def load_experiment(configs, mods=None, global_config=None, logger=None):
             main_config[p[0]+'/niceness'] = cluster_config.get('niceness',20)
 
     map_paths = main_config.find_path(symbols['serial-map'],mode='startswith',action='remove_substring')
+    map_paths = [p for p in map_paths if not p.startswith('global')]
     map_paths = [(task_parameters_level_from_path(p),p.split(task_parameters_level_from_path(p) + '/')[-1]) for p in map_paths]
     map_paths_ = {}
 
