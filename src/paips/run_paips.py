@@ -8,7 +8,10 @@ from paips.utils import logger, apply_mods, load_experiment
 
 from kahnfigh import Config
 from kahnfigh.utils import IgnorableTag, merge_configs,replace_in_config
-from ruamel.yaml import YAML
+try:
+    from ruamel.yaml import YAML
+except:
+    from ruamel_yaml import YAML
 from io import StringIO
 from pathlib import Path
 import copy

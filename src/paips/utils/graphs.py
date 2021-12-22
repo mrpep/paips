@@ -3,7 +3,10 @@ from kahnfigh import Config
 from .settings import symbols
 from kahnfigh.utils import IgnorableTag, merge_configs, replace_in_config
 from .config_processors import apply_mods, task_parameters_level_from_path, process_config
-from ruamel.yaml import YAML
+try:
+    from ruamel.yaml import YAML
+except:
+    from ruamel_yaml import YAML
 import fnmatch
 from io import StringIO
 
